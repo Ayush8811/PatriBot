@@ -23,13 +23,22 @@ provider. That has two consequences:
 
 | | **IndianRailAPI.com** | **RailRadar** | **RapidAPI marketplace "IRCTC" APIs** |
 |---|---|---|---|
-| Pricing found | **₹500 per full month** for an active (paid) account, pro-rated for the first month. Free test account for development | **Free sandbox: 1,000 requests/month.** Paid plan prices were not visible in search results | Varies by listing. Example: Pro **$5/mo for 10k requests**, Ultra **$10/mo for 30k** (on one IRCTC listing). Another listing: $4.01 / $11.99 / $49 tiers |
-| Fits ₹500? | ✅ Exactly, *if* the request cap ≥ ~15k/month (**verify**) | ❓ Depends on paid tiers (**verify**) | ⚠️ 10k for ~₹425 fits, but **below** our full volume. 30k for ~₹850 is over budget |
+| Pricing found | **₹500 per full month** for an active (paid) account, pro-rated for the first month. Free test account for development | Free: 1,000 req/month. **Basic: ₹1,000/month for 20k.** Pro: ₹3,000/month for 100k | Varies by listing. Example: Pro **$5/mo for 10k requests**, Ultra **$10/mo for 30k** (on one IRCTC listing). Another listing: $4.01 / $11.99 / $49 tiers |
+| Fits ₹500? | ✅ Exactly, *if* the request cap ≥ ~15k/month (**verify**) | ❌ Basic is 2× the budget. Free tier is OK for development only | ⚠️ 10k for ~₹425 fits, but **below** our full volume. 30k for ~₹850 is over budget |
 | Live status with a date parameter | ✅ `livetrainstatus/.../trainnumber/<no>/date/<yyyymmdd>/` | ✅ Live train status endpoint | ✅ e.g. `getLiveTrainStatus` (irctc1) |
 | **Past-date depth** (needed for backfill and catch-up) | ❓ **verify** | ❓ **verify** | ❓ **verify** (irctc1 has a "start day" parameter) |
 | Other useful endpoints | Trains between stations, train route, station list, rescheduled trains | Station boards, **GeoJSON route geometry** (useful for corridor paths), timetables | Schedules, trains between stations, live station |
 | Terms on storage and commercial use | ❓ Commercial plans exist (good sign). **Verify the data-storage clause** | ⚠️ Terms say its aim is **non-commercial** use by independent developers, and forbid scraping beyond API access. OK for the POC, but **risky for D5** | ❓ Each listing has its own terms. Usually unofficial wrappers. **Highest provenance risk** |
 | Security note | API key goes **in the URL path**, over plain `http://` in the documented example. Use HTTPS if supported, and never log raw URLs (the collector redacts keys) | Key in a header (typical) | `X-RapidAPI-Key` header |
+
+## 2a. Addendum (round 2): the owner asked about providers other than IndianRailAPI
+
+| | **RailKit** (railkit.in) | **RailRadar** (pricing now found) |
+|---|---|---|
+| Pricing | Free plan. **Pro from ₹49/month.** Request quota per plan not found (**verify**). Returns HTTP 429 when the monthly quota is used up | Free 1k/month. Basic ₹1,000 for 20k. Pro ₹3,000 for 100k |
+| Key endpoint | **`getTrainHistory(train, date)`**: the completed journey for a date, with a **station-by-station timeline and per-stop delays**. That is exactly our training record. Also live status, station boards, trains between stations, cancelled trains | Live status, station boards, timetables, GeoJSON route geometry |
+| Fit | ✅ **Best functional fit and cheapest**, if the quota covers ~15k calls/month | ❌ Over budget for full volume |
+| Risks | It appears to be a **single-developer project** (open-source SDK on GitHub), so it carries longevity and support risk. Terms on storage and commercial derived use: **verify** | Terms lean towards non-commercial use |
 
 ## 3. Recommendation
 
@@ -61,5 +70,6 @@ cheapest one that passes checks 2–4 and let the collector sample Tier B.
 ## Sources
 - [IndianRailAPI: FAQ (pricing, account types)](https://indianrailapi.com/frequently-asked-question)
 - [IndianRailAPI: Live train status endpoint](https://indianrailapi.com/api-collection/live-train-status)
+- [RailKit](https://railkit.in/) · [RailKit SDK on GitHub](https://github.com/RAJIV81205/RailKit)
 - [RailRadar: API docs](https://railradar.in/docs) · [Pricing](https://railradar.in/pricing) · [Terms](https://railradar.in/terms)
 - [RapidAPI: IRCTC (irctc1) pricing](https://rapidapi.com/IRCTCAPI/api/irctc1/pricing) · [IRCTC PNR status API pricing](https://rapidapi.com/amiteshgupta/api/irctc-indian-railway-pnr-status/pricing) · [Indian Railway IRCTC](https://rapidapi.com/rahilkhan224/api/indian-railway-irctc)
