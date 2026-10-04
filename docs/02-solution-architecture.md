@@ -324,8 +324,7 @@ so it is capped and limited.
 - Paid usage has its own monthly ceiling.
 - An admin alert fires at 50 / 80 / 100 % of each budget.
 
-**Model choice is open (OQ-5).** The pipeline works with any of the models. The table above shows how each option
-fits the budget.
+**Chosen (D12, tentative):** Haiku 4.5 for parsing + Sonnet 5.5 for the explanation, ≈ ₹1.0 per query. To be re-checked against measured cost and quality in Phase 4.
 
 ## 10. Application layer and infrastructure
 
@@ -417,9 +416,9 @@ Phases 1–4 run on **baseline** ETAs, and phase 5 swaps in the ML model. The pr
 | # | Question | Status |
 |---|---|---|
 | OQ-1 | Does ₹500 include Claude? | ✅ Resolved: a separate ₹500/month for Claude (D8) |
-| OQ-2 | Collector infrastructure | ✅ Resolved: GitHub Actions + private data repo (D9). Confirm you're OK creating the private `patribot-data` repo |
+| OQ-2 | Collector infrastructure | ✅ Resolved: GitHub Actions + private `patribot-data` repo (D9, D14) |
 | OQ-3 | Corridors | ✅ Resolved: 5 corridors, path-based membership (D4, D10) |
 | OQ-4 | Timeline | ✅ Resolved: milestone-based (D11) |
-| OQ-5 | **Which Claude model(s) for parse and explain?** See the §9 table. Opus 5.5 gives a negative paid-tier margin at ₹100 per 50 queries. Sonnet 5.5, Haiku 4.5, or the Haiku + Sonnet mix all fit | Open |
-| OQ-6 | Free-tier AI chat allowance: 3 queries per day per user? | Open |
+| OQ-5 | **Which Claude model(s) for parse and explain?** See the §9 table. Opus 5.5 gives a negative paid-tier margin at ₹100 per 50 queries. Sonnet 5.5, Haiku 4.5, or the Haiku + Sonnet mix all fit | ✅ Tentative: Haiku 4.5 parse + Sonnet 5.5 explain (D12). Re-check in Phase 4 |
+| OQ-6 | Free-tier AI chat allowance | ✅ 3 per user per day (D13) |
 | OQ-7 | Railway API provider: decided by the Phase 0 spike. Needs you to sign up and add the key as a GitHub secret | Open |

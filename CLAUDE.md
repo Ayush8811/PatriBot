@@ -19,7 +19,7 @@ making design changes. The decisions D1–D11 recorded there are binding unless 
 - Railway data API: ≤ ₹500/month. The collector enforces `max_calls_per_month` and samples Tier B trains.
 - Claude API: ≤ ₹500/month in the POC. Paid tier is ₹100/month for 50 AI chat queries, so each AI query must cost well
   under ₹2. Default chat path = parse → deterministic planner → explain (2 LLM calls). The agent loop is a capped
-  fallback only. Models are configured per step through env vars. The model choice is an owner decision (OQ-5).
+  fallback only. Models are configured per step through env vars. Models (D12, tentative): Haiku 4.5 for parsing, Sonnet 5.5 for the explanation. Free tier: 3 AI queries per day (D13).
 - The LLM never invents trains, times or rules. Those come only from tool or planner output.
 
 ## Stack

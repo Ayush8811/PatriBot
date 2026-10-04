@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | 01 — Business Requirements |
-| Status | **v0.3: review round 2 applied (D1–D11, see §13)** |
+| Status | **v0.3: review round 2 applied (D1–D14, see §13)** |
 | Next documents | 02 — Solution Architecture, 03 — Data Design, 04 — ML (ETA) Design, 05 — RAG / Agent Design |
 | Scope | Indian Railways (IR) passenger trains, reserved classes |
 
@@ -253,6 +253,9 @@ The phases are **milestone-based, not calendar-based** (D11). Each phase is done
 | D9 | Always-on collector infra | No GitHub Actions + Cloudflare R2 setup yet | Collector runs on the GitHub account the project already uses (Actions is included with it), storing raw files in a **separate private GitHub repo**. No new accounts needed. Storage stays swappable to S3/R2 later (solution architecture doc, §2) |
 | D10 | Corridor definition | A corridor = **every train along the path between the two clusters**, including trains that start or end at intermediate stations | More trains per corridor. The data-API budget is managed through train-type filters and sampling (solution architecture doc, §4) |
 | D11 | Timeline | "Depends" on available time | Phases are milestone-based. Only the collector start date is urgent |
+| D12 | Claude models (OQ-5) | **Haiku 4.5 for parsing + Sonnet 5.5 for the explanation** (tentative, "maybe") | `PATRIBOT_MODEL_PARSE=claude-haiku-4-5`, `PATRIBOT_MODEL_EXPLAIN=claude-sonnet-5-5`. Re-check against measured token cost and quality in Phase 4 |
+| D13 | Free-tier allowance (OQ-6) | **3 AI chat queries per user per day** | `FREE_DAILY_AI_QUERIES=3` |
+| D14 | Raw data storage (OQ-2) | Private `patribot-data` repo approved | Collector writes there |
 
 ## 14. Glossary
 
