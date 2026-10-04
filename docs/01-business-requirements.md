@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | 01 — Business Requirements |
-| Status | **Draft v0.1, for review** |
+| Status | **v0.2: decisions from review applied (see §13)** |
 | Next documents | 02 — Solution Architecture, 03 — Data Design, 04 — ML (ETA) Design, 05 — RAG / Agent Design |
 | Scope | Indian Railways (IR) passenger trains, reserved classes |
 
@@ -71,8 +71,8 @@ These are the "golden" queries. The finished system must handle them end to end.
 
 ### 5.1 In scope (MVP)
 
-- **Geography:** start with **high-demand corridors**. Kolkata ↔ Delhi first, then Mumbai ↔ Delhi,
-  Delhi ↔ Patna, Bengaluru ↔ Chennai. Design must scale to all-India.
+- **Geography:** **4 MVP corridors**: Kolkata ↔ Delhi (primary), Delhi ↔ Patna, Mumbai ↔ Delhi,
+  Bengaluru ↔ Hyderabad. The rationale is in the solution architecture doc, §3. Design must scale to all-India.
 - **Train search:** station and city resolution, direct trains, date-range search, filters (overnight,
   departure/arrival windows, class, train type such as Rajdhani, Duronto or Vande Bharat Sleeper).
 - **ETA and delay prediction:** per train × station × date, predicted delay distribution (P50, P90), and
@@ -88,7 +88,7 @@ These are the "golden" queries. The finished system must handle them end to end.
 
 ### 5.2 Phase 2 (post-MVP)
 
-- Waitlist **confirmation-probability** model (WL/RAC → CNF), if we can source the data.
+- Waitlist **confirmation-probability** model (WL/RAC → CNF). *Deferred by decision D6.*
 - Live seat availability and fare lookup through a licensed or partner API.
 - Alerts, e.g. "notify me if 12301's predicted delay at NDLS goes above 2 h".
 - Multi-modal fallback (flight or bus suggestions when every rail option is poor).
@@ -139,7 +139,7 @@ These are the "golden" queries. The finished system must handle them end to end.
 ### 6.5 Interfaces
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-19 | A chat web UI with itinerary cards (train, date, departure, scheduled vs. predicted arrival, reliability badge, IRCTC deep link) | Must |
+| FR-19 | A proper web app (not Streamlit), with a chat UI and itinerary cards (train, date, departure, scheduled vs. predicted arrival, reliability badge, IRCTC deep link) | Must |
 | FR-20 | A REST API: `/search`, `/plan`, `/predict-eta`, `/chat` | Must |
 | FR-21 | An admin and observability dashboard covering pipeline freshness, model metrics and query logs | Should |
 
@@ -169,8 +169,8 @@ or labelled as such), and outlier handling.
 | NFR-2 | Freshness | Timetable ≤ 7 days old. Historical delays loaded by T+1. Live data ≤ 15 min old (when enabled) |
 | NFR-3 | Accuracy | ETA MAE (final destination, forecast mode) ≥ 40 % better than the scheduled-time baseline. P90 coverage within 85–95 % |
 | NFR-4 | Reliability | Pipelines are idempotent and re-runnable, with backfill support. API uptime 99 % (best effort) |
-| NFR-5 | Cost | Runs on a small budget: local Docker for dev and a single small cloud VM or free tiers for the demo. LLM cost per query is tracked |
-| NFR-6 | Compliance | Use only data sources whose terms allow it. Respect robots.txt and rate limits. Store no PII beyond optional anonymous session IDs |
+| NFR-5 | Cost | Data API spend ≤ **₹500/month**. Runs local-first on Docker; cloud deployment comes later. LLM cost per query is tracked and capped (see the solution architecture doc, §9) |
+| NFR-6 | Compliance | Use only data sources whose terms allow it. Respect robots.txt and rate limits. Store no PII beyond optional anonymous session IDs. Keep a **provenance record for every dataset**, which a future acquirer's IP due diligence will need |
 | NFR-7 | Explainability | Every ranking factor is visible to the user. Model feature importances are documented |
 | NFR-8 | Observability | Data-quality checks, pipeline run logs, model drift monitoring, and LLM traces (prompt, tools, latency, cost) |
 | NFR-9 | Reproducibility | Versioned data snapshots, models and prompts. Infrastructure as code. One-command local setup |
@@ -222,19 +222,17 @@ or labelled as such), and outlier handling.
 | **5 — Ops and hardening** | Monitoring, drift detection, CI/CD, deployment, demo | Public demo plus write-up |
 | **6 — Phase 2 features** | WL-confirmation model, live nowcast, alerts, more corridors | — |
 
-## 13. Open questions (need decisions before Solutioning)
+## 13. Decisions log
 
-1. **Data sourcing:** are we willing to use a paid or freemium railway API (e.g. aggregator APIs on RapidAPI),
-   or must we stay with open data plus our own collection? This drives everything else.
-2. **Cloud and stack preference:** local-first (Docker + DuckDB/Postgres + Airflow/Dagster), or a specific
-   cloud (GCP/BigQuery, AWS, Azure, Databricks)? Is there a budget ceiling?
-3. **LLM choice:** a hosted API (Claude etc.), an open-source local model, or both, with a hosted model for
-   planning and a small local one for parsing?
-4. **MVP corridor:** start with Kolkata ↔ Delhi only, or also 2–3 other corridors?
-5. **Audience:** a portfolio / demo project, or a product aimed at real public users? This changes NFRs
-   such as auth, scale and legal review.
-6. **Include the waitlist-confirmation model in the MVP?** It has high user value but the data is hard to get.
-7. **UI:** is Streamlit/Gradio enough for the demo, or do we want a proper web app (Next.js) or a Telegram/WhatsApp bot?
+| # | Question | Decision | Consequence |
+|---|---|---|---|
+| D1 | Data sourcing | Paid API is allowed, **≤ ₹500/month** | Use a freemium/paid railway API for timetables and running status, plus open data. Call volume must fit the budget (see the solution architecture doc, §4) |
+| D2 | Stack | **Local-first**, cloud later | Docker Compose. Storage and compute stay cloud-portable (S3-compatible paths, dbt, containers). The daily data collector is the one exception: it must run every day, so it gets a tiny always-on runner |
+| D3 | LLM | **Claude** (Anthropic API) | Tool-use agent through the Anthropic Python SDK. Embeddings come from a local open-source model, since Anthropic has no embeddings endpoint |
+| D4 | MVP corridors | **3–4 corridors** | Kolkata ↔ Delhi, Delhi ↔ Patna, Mumbai ↔ Delhi, Bengaluru ↔ Hyderabad |
+| D5 | Audience | Portfolio now. **Long term, sell to ConfirmTkt / ixigo-class companies** | API-first and B2B-ready. Data sources sit behind adapters so a buyer can plug in their own data. Measurable accuracy benchmarks. Clean data provenance (see §15) |
+| D6 | Waitlist-confirmation model | **Not now** | Moved to the backlog |
+| D7 | UI | **Proper web app** | Next.js + TypeScript frontend calling a FastAPI backend |
 
 ## 14. Glossary
 
@@ -249,3 +247,21 @@ or labelled as such), and outlier handling.
 | Station cluster | All major stations serving a city (e.g. Delhi = NDLS, DLI, NZM, ANVT, DEE) |
 | P50 / P90 | Median and 90th-percentile predicted arrival time |
 | Bronze / Silver / Gold | Raw / cleaned / business-ready data layers (medallion architecture) |
+
+## 15. Commercial positioning (long-term, from D5)
+
+**Likely buyers or partners:** ixigo (which owns ConfirmTkt and its trains business), RailYatri, MakeMyTrip/Goibibo,
+Paytm Travel, and IRCTC-authorised agents.
+
+**They already have:** booking flows, very large user bases, and their own running-status and PNR data.
+**What they would value from PatriBot:**
+1. **Proven ETA accuracy:** a published benchmark, per corridor, against "scheduled time" and against
+   naive historical averages.
+2. **An itinerary intelligence engine:** split and break journeys plus alternate-station planning that accounts for delay risk.
+   Booking apps don't do this well today.
+3. **A natural-language planning layer** on top of their existing inventory.
+4. **Easy integration:** a clean REST API, source adapters for *their* data, and a containerised deployment.
+5. **Clean IP:** no scraped or terms-violating data in the training history, with documented provenance.
+
+The architecture therefore treats **data sources as replaceable plug-ins** and the **models plus the planner as the
+product**.

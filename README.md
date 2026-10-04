@@ -5,5 +5,6 @@ running data and answers natural-language trip requests ("overnight train Kolkat
 travel time"), including split/break-journey planning, with a RAG + agent layer.
 
 ## Docs
-1. [Business Requirements](docs/01-business-requirements.md) — *draft v0.1*
-2. Solution Architecture — *next*
+1. [Business Requirements](docs/01-business-requirements.md) — *v0.2*
+2. [Solution Architecture](docs/02-solution-architecture.md) — *draft v0.1*
+3. Data Design, ETA Model Design, Agent & RAG Design — *next*
