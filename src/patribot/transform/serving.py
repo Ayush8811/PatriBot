@@ -36,6 +36,13 @@ SERVING_TABLES: tuple[ServingTable, ...] = (
     ServingTable("gold.fct_run_summary", "fct_run_summary", ("run_id",)),
     ServingTable("gold.fct_run_stop_delay", "fct_run_stop_delay", ("run_stop_id",)),
     ServingTable("gold.agg_delay_stats", "agg_delay_stats", ("delay_stat_id",)),
+    # planner (Phase 2): timetable, corridor membership and the ETA baseline's fallback levels
+    ServingTable("gold.dim_train_schedule", "dim_train_schedule", ("train_stop_id",)),
+    ServingTable("gold.dim_train_corridor", "dim_train_corridor", ("train_corridor_id",)),
+    ServingTable("gold.agg_delay_stats_all", "agg_delay_stats_all", ("delay_stat_id",)),
+    ServingTable("gold.agg_train_delay_stats", "agg_train_delay_stats", ("train_delay_stat_id",)),
+    ServingTable("gold.agg_corridor_delay_stats", "agg_corridor_delay_stats", ("corridor_delay_stat_id",)),
+    ServingTable("gold.dim_date", "dim_date", ("date_day",)),
     ServingTable("ref.seed_corridor", "corridor", ("corridor_id",)),
     ServingTable("ref.seed_corridor_waypoint", "corridor_waypoint", ("corridor_id", "path_name", "waypoint_seq")),
     ServingTable("ref.seed_corridor_split_hub", "corridor_split_hub", ("corridor_id", "station_code")),

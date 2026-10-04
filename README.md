@@ -10,14 +10,18 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
 3. Phase 0: [API provider spike](docs/phase0/01-api-provider-spike.md) · [Collector setup (owner steps)](docs/phase0/02-collector-setup.md)
 4. Phase 1: [Generated watchlist](docs/phase1/watchlist.md)
 5. Phase 1: [Data platform (run locally, tables)](docs/phase1/data-platform.md)
-6. [API v1 contract](docs/api/v1.md) · Phase 3: [Web app (Next.js, mock mode)](docs/phase3/web-app.md)
+6. [API v1 contract](docs/api/v1.md) · Phase 2: [Planner and API](docs/phase2/planner-api.md)
+7. Phase 3: [Web app (Next.js, mock mode)](docs/phase3/web-app.md)
 
 ## Status
 - **Phase 0, Foundations: done.** The collector runs every 3 h on RailKit Advance (D15) in the private `patribot-data` repo.
-- **Phase 1, Data platform: in progress.**
+- **Phase 1, Data platform: done** (weather deferred).
   - The watchlist generator (corridor membership from RailKit timetables) runs weekly in the data repo.
   - The bronze → silver → gold pipeline (Dagster + dbt-duckdb) and the reverse ETL to Postgres are built and tested.
-  - Still to come: `dim_train_corridor` in dbt, weather and calendar.
+  - The cached timetable feeds `dim_train_schedule`, `dim_train_corridor` and station coordinates. A calendar seed
+    (holidays, festival windows, fog season) feeds `dim_date`.
+- **Phase 2, Planner + API: built.** Direct, overnight and split search with the `baseline_hist` ETA and explainable
+  ranking, served by FastAPI under `/api/v1` ([contract](docs/api/v1.md)). `/chat` is a rule-based stub until Phase 4.
 - **Phase 3, Web app: in progress.** Next.js app in `web/` (search form, itinerary cards, train page, chat shell),
   built against the API v1 contract. A fixtures mock mode lets it run without the backend.
 
@@ -32,9 +36,16 @@ RAIL_API_KEY=... uv run patribot-watchlist build --out watchlist.yaml   # corrid
 # data platform on synthetic data (details: docs/phase1/data-platform.md)
 uv run python scripts/make_sample_bronze.py --out samples/bronze
 PATRIBOT_DATA_DIR=samples/bronze uv run python -m patribot.transform.bronze   # bronze → Parquet silver input
+PATRIBOT_DATA_DIR=samples/bronze uv run python -m patribot.transform.timetable  # timetable cache → Parquet
 uv run dbt build --project-dir dbt --profiles-dir dbt                          # silver + gold in warehouse/patribot.duckdb
 PATRIBOT_DATA_DIR=samples/bronze uv run dagster dev                            # or orchestrate it all in Dagster
 docker compose -f infra/docker-compose.yml --env-file .env up -d               # Postgres + pgvector (cp .env.example .env)
+
+# planner API on that warehouse (details: docs/phase2/planner-api.md)
+PATRIBOT_TODAY=2026-12-10 uv run patribot-api       # http://127.0.0.1:8000/api/v1/docs (PATRIBOT_TODAY: sample data only)
+curl -s localhost:8000/api/v1/plan -H 'content-type: application/json' -d '{"origin": "KOLKATA",
+  "destination": "DELHI", "date_from": "2026-12-20", "date_to": "2026-12-30",
+  "preferences": {"overnight": true, "objective": "fastest"}}'
 ```
 
 ### Web app (`web/`, Node 22)

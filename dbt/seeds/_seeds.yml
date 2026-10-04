@@ -48,3 +48,25 @@ seeds:
     columns:
       - name: param
         data_tests: [unique, not_null]
+
+  # Hand-kept, not generated from the corridor config.
+  - name: calendar_events
+    description: >
+      National holidays, festival travel-rush windows (Holi, Eid, Durga Puja, Diwali, Chhath, Christmas/New Year) and
+      the North India fog season, 2026–2027. Lunar festival dates and all window bounds are approximate
+      (`approximate = true`); check them against the official holiday list before relying on them.
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: kind
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [national_holiday, festival_window, fog_season]
+      - name: end_date
+        data_tests:
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "end_date >= start_date and (peak_date is null or peak_date between start_date and end_date)"
