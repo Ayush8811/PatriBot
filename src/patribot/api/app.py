@@ -8,6 +8,7 @@ Data comes from the warehouse (DuckDB) or the Postgres serving copy, see patribo
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -52,6 +53,20 @@ def create_app(service: PlannerService | None = None) -> FastAPI:
         CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"]
     )
     app.state.service = service or PlannerService()
+
+    # Hosted deployments set PATRIBOT_API_KEY: every request except the health check must then carry it in
+    # `x-patribot-key`. Only the web app's server-side proxy knows the key; browsers never call the API directly.
+    api_key = os.environ.get("PATRIBOT_API_KEY", "")
+    if api_key:
+        open_paths = {f"{API_PREFIX}/health"}
+
+        @app.middleware("http")
+        async def _require_api_key(request: Request, call_next):
+            if request.method != "OPTIONS" and request.url.path not in open_paths:
+                given = request.headers.get("x-patribot-key", "")
+                if not hmac.compare_digest(given.encode(), api_key.encode()):
+                    return JSONResponse(status_code=401, content={"detail": "missing or invalid API key"})
+            return await call_next(request)
 
     @app.exception_handler(RepositoryUnavailable)
     async def _unavailable(_: Request, exc: RepositoryUnavailable) -> JSONResponse:

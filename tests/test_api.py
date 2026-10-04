@@ -268,3 +268,23 @@ def test_chat_stub_error_event_has_a_code(built_warehouse):
     c = TestClient(create_app(PlannerService(Broken(db.parent), today=lambda: TODAY)))
     evs = events(c.post("/api/v1/chat", json={"message": "Kolkata to Delhi Dec 20"}).text)
     assert evs == [("error", {"code": "server_error", "detail": "data unavailable: warehouse locked"})]
+
+
+# ---- API key (hosted deployments) -----------------------------------------------------------------------------
+
+
+def test_api_key_required_when_configured(built_warehouse, monkeypatch):
+    monkeypatch.setenv("PATRIBOT_API_KEY", "s3cret-key")
+    db, _, _ = built_warehouse
+    service = PlannerService(DuckDBRepository(db.parent), today=lambda: TODAY)
+    c = TestClient(create_app(service))
+    assert c.get("/api/v1/health").status_code == 200  # open for platform health checks
+    assert c.get("/api/v1/places/search", params={"q": "kol"}).status_code == 401
+    assert c.get("/api/v1/places/search", params={"q": "kol"}, headers={"x-patribot-key": "wrong"}).status_code == 401
+    assert c.get("/api/v1/openapi.json").status_code == 401
+    ok = c.get("/api/v1/places/search", params={"q": "kol"}, headers={"x-patribot-key": "s3cret-key"})
+    assert ok.status_code == 200 and ok.json()["results"]
+
+
+def test_no_api_key_configured_keeps_local_dev_open(client):
+    assert client.get("/api/v1/places/search", params={"q": "kol"}).status_code == 200

@@ -1,0 +1,17 @@
+# Render Blueprint: the PatriBot API as a free Docker web service built from this PRIVATE repo.
+# Render dashboard -> New -> Blueprint -> pick this repo. Deploys are triggered daily by .github/workflows/deploy.yml
+# (autoDeploy is off so the 3-hourly collector commits don't each trigger a build).
+services:
+  - type: web
+    name: patribot-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: false
+    envVars:
+      - key: PATRIBOT_API_KEY      # copy this generated value into Vercel's PATRIBOT_API_KEY
+        generateValue: true
+      - key: PATRIBOT_CORS_ORIGINS # the browser never calls the API directly (Vercel proxies server-side)
+        value: "http://localhost:3000"

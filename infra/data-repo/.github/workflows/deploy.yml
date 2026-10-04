@@ -1,0 +1,27 @@
+name: deploy
+
+# Rebuilds the hosted API (Render) once a day so it serves the latest collected data, and on demand by pushing
+# deploy-request.txt. Needs the repo secret RENDER_DEPLOY_HOOK (Render service -> Settings -> Deploy Hook).
+
+on:
+  schedule:
+    - cron: "37 0 * * *"   # 00:37 UTC = 06:07 IST, after the night's collections
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [deploy-request.txt]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          if [ -z "$HOOK" ]; then echo "::notice::RENDER_DEPLOY_HOOK not set; skipping."; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "deploy triggered"
