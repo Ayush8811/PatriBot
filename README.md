@@ -4,6 +4,10 @@ AI travel planner for Indian Railways. It predicts realistic train arrival times
 running data and answers natural-language trip requests ("overnight train Kolkata → Delhi, Nov 20–30, least
 travel time"), including split/break-journey planning, with a RAG + agent layer.
 
+## Live app
+**https://patri-bot.vercel.app** (private, single-owner login). The API runs on Render's free tier
+at `https://patribot-api.onrender.com`, so the first search after idle can take 30–60 s to wake up.
+
 ## Docs
 1. [Business Requirements](docs/01-business-requirements.md) — *v0.3*
 2. [Solution Architecture](docs/02-solution-architecture.md) — *v0.2*
