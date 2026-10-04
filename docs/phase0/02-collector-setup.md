@@ -31,7 +31,8 @@ goes, sets `lookback_days`, and starts collection.
   `config/watchlist.yaml`) has `trains: []`, so scheduled runs make no calls and send no failure emails.
 - The probe can also be triggered by pushing `probe-request.txt` (line 1: train number, line 2: days back), because
   workflow dispatch isn't available to Claude's session.
-- **To resume:** buy Pro (₹59, 5k/month) or Advance (₹89, 10k/month, + optional 20k pack ₹159). Claude then re-runs the
+- **To resume:** buy **Advance** (₹89, 10k/month, "API endpoint access", + optional 20k pack ₹159). **Pro (₹59) is
+  "SDK access only"** like the free tier, so it would also return 403 to our REST client. Claude then re-runs the
   probe, sets `lookback_days`, and restores the train list and budget.
 
 ## Monitoring
@@ -40,4 +41,3 @@ goes, sets `lookback_days`, and starts collection.
 - `state/usage/<month>.json` shows API calls per day. The collector spreads `max_calls_per_month` evenly across the
   month.
 - GitHub Actions minutes: private repos get 2,000 free minutes/month. The collector needs about 700–900.
-- On RailKit's Pro plan (200 requests per 10 min), add the Actions variable `RAIL_MIN_INTERVAL_S=3.1` in `patribot-data`.
