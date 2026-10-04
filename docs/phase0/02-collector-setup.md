@@ -23,6 +23,14 @@ token is needed. The workflow files are kept in [`infra/data-repo/`](../../infra
 Then tell Claude. Claude pushes the workflows, runs the `probe` workflow to check how far back RailKit's history
 goes, sets `lookback_days`, and starts collection.
 
+## Current state (free tier)
+- `patribot-data` is set up with the `collect` and `probe` workflows and a **free-tier `watchlist.yaml`**: 1 train
+  (12301) and `max_calls_per_month: 40`. A `watchlist.yaml` at the data-repo root overrides `config/watchlist.yaml`.
+- The probe can also be triggered by pushing `probe-request.txt` (line 1: train number, line 2: days back), because
+  workflow dispatch isn't available to Claude's session.
+- **To scale up:** buy the Advance plan (+ request pack), then replace the data-repo `watchlist.yaml` with the
+  generated one and raise `max_calls_per_month`.
+
 ## Monitoring
 - **A failed run sends you an email from GitHub.** The run fails on a bad key (401/403), an exhausted quota or rate limit
   (429; it stops immediately and the remaining runs wait for the next run), or when every call errors.
