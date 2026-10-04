@@ -181,9 +181,26 @@ Mitigations:
 of the delay targets. Mark rescheduled departures. Clip delay outliers above a set threshold, but keep them in a
 separate disruption table.
 
+**As built in Phase 1** ([details](phase1/data-platform.md)); differences from the plan above:
+- **Bronze** is the collector's gzip JSONL in the `patribot-data` checkout (`raw/<source>/running_status/…`), not a
+  DuckDB table. A Python step (`patribot.transform`, provider parsers) picks one envelope per run and writes Parquet
+  `silver_input/{runs,stops}`; dbt starts from there. Parsing provider JSON stays in Python, where it is unit-tested.
+- **Silver** is `stg_train_run` (one row per attempted run, including not-found and error runs) and
+  `stg_train_run_stop`. `stg_train_schedule` and `stg_station` wait for a timetable source.
+- **Gold** adds `fct_run_summary` (per run: origin departure delay, final arrival delay, journey time actual vs.
+  scheduled, `run_state`). `dim_station_cluster` maps each station to its city cluster. `dim_train` is a running-data
+  view, not SCD-2 yet. `dim_train_corridor`, `feat_eta_training`, `route_graph_edges` and `fct_eta_forecast` come later.
+- **Outliers** are flagged (`is_disruption`, var `delay_outlier_min`, default 720 min) and kept in the fact tables
+  rather than moved to a separate disruption table. Only `is_delay_target` rows feed `agg_delay_stats`.
+- **Rescheduled departures** are not detected yet. The RailKit history payload has no field for them.
+
 ### 5.3 Reverse ETL
 A Dagster asset copies serving tables (`fct_eta_forecast`, `dim_*`, `agg_delay_stats`, schedule) from DuckDB into
 Postgres after each successful build. The API only reads from Postgres.
+
+*As built:* the asset copies the gold tables and the corridor reference tables into schema `serving`. All tables load
+into `*__load` tables first and are then swapped in by rename inside one transaction. Without `PATRIBOT_PG_DSN` the
+asset skips itself, which is how CI runs.
 
 ## 6. ML plane: ETA model (detail in doc 04)
 
@@ -368,15 +385,17 @@ PatriBot/
 ├── src/patribot/
 │   ├── sources/               # source adapters (Protocol + implementations)        ✅ Phase 0
 │   ├── collector/             # budgeted daily collector + CLI                      ✅ Phase 0
+│   ├── transform/             # bronze parsers → silver input, dbt seeds, reverse ETL  ✅ Phase 1
 │   ├── planner/               # search, split journeys, ranking                     Phase 2
 │   ├── ml/                    # features, training, inference, evaluation           Phase 5
 │   └── agent/                 # Claude parse/explain, RAG                           Phase 4
-├── pipelines/                 # Dagster definitions                                 Phase 1
-├── dbt/                       # dbt project (bronze→silver→gold)                    Phase 1
+├── pipelines/                 # Dagster definitions                                 ✅ Phase 1
+├── dbt/                       # dbt project (silver→gold)                           ✅ Phase 1
+├── scripts/                   # make_sample_bronze.py (synthetic data for dev/CI)   ✅ Phase 1
 ├── api/                       # FastAPI service                                     Phase 2
 ├── web/                       # Next.js app                                         Phase 3
 ├── evals/                     # golden queries and eval runner                      Phase 4
-├── infra/                     # data-repo workflows (✅ Phase 0), docker-compose (Phase 1)
+├── infra/                     # data-repo workflows (✅ Phase 0), docker-compose (✅ Phase 1)
 ├── tests/
 └── .github/workflows/         # ci.yml                                              ✅ Phase 0
 ```
