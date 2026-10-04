@@ -40,6 +40,37 @@ provider. That has two consequences:
 | Fit | ✅ **Best functional fit and cheapest**, if the quota covers ~15k calls/month | ❌ Over budget for full volume |
 | Risks | It appears to be a **single-developer project** (open-source SDK on GitHub), so it carries longevity and support risk. Terms on storage and commercial derived use: **verify** | Terms lean towards non-commercial use |
 
+## 2b. RailKit deep-dive (round 3): ❌ terms block our core use
+
+The owner chose RailKit. Before building on it, its open-source repo (`RAJIV81205/RailKit`, `web/lib/constants.ts`,
+terms dated **2026-08-03**) was checked.
+
+**API (verified from source):**
+- Base URL `https://api.railkit.in`, header `x-api-key`.
+- `GET /api/v1/trains/:trainNo/history/:DD-MM-YYYY` returns the completed journey with per-stop scheduled and actual times and delays, or 404 if the train has not completed that journey.
+- Live status: `GET /api/v1/trains/:no/live/:date` (NTES-backed) and `/api/v2/...` (WIMT-backed, today back to 5 days ago).
+
+**Plans:**
+
+| Plan | Price/month | Requests/month |
+|---|---|---|
+| Free | ₹0 | 50 |
+| Pro | ₹59 | 5,000 |
+| Advance | ₹89 | 10,000 |
+
+Request packs can be added to a paid plan: 20k for ₹159, 30k for ₹229. So about 30k calls/month would cost ≈ ₹250 (Advance + the 20k pack). The price is excellent.
+
+**The terms, however, prohibit exactly what the collector does:**
+> "Users may not create historical datasets, commercial archives, analytics warehouses, or large-scale repositories
+> derived primarily from RailKit data." · "Long-term retention of RailKit data is prohibited except for temporary
+> application functionality." · "Building derivative products whose primary value is RailKit data." · "Reverse
+> engineering, probing, testing…"
+
+**Conclusion:** RailKit **must not** be used to build the training history. Doing so would break its terms and
+taint the dataset's provenance, which defeats D5 (selling to ConfirmTkt or ixigo). It *may* be acceptable for
+**request-time features inside our own app** (e.g. live status for nowcasts, short-term caching only), or with
+**written permission** from its developer.
+
 ## 3. Recommendation
 
 1. **Primary candidate: IndianRailAPI.com.** Its flat ₹500/month matches the budget exactly, it has commercial
