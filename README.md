@@ -10,6 +10,7 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
 3. Phase 0: [API provider spike](docs/phase0/01-api-provider-spike.md) · [Collector setup (owner steps)](docs/phase0/02-collector-setup.md)
 4. Phase 1: [Generated watchlist](docs/phase1/watchlist.md)
 5. Phase 1: [Data platform (run locally, tables)](docs/phase1/data-platform.md)
+6. [API v1 contract](docs/api/v1.md) · Phase 3: [Web app (Next.js, mock mode)](docs/phase3/web-app.md)
 
 ## Status
 - **Phase 0, Foundations: done.** The collector runs every 3 h on RailKit Advance (D15) in the private `patribot-data` repo.
@@ -17,6 +18,8 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
   - The watchlist generator (corridor membership from RailKit timetables) runs weekly in the data repo.
   - The bronze → silver → gold pipeline (Dagster + dbt-duckdb) and the reverse ETL to Postgres are built and tested.
   - Still to come: `dim_train_corridor` in dbt, weather and calendar.
+- **Phase 3, Web app: in progress.** Next.js app in `web/` (search form, itinerary cards, train page, chat shell),
+  built against the API v1 contract. A fixtures mock mode lets it run without the backend.
 
 ## Development
 ```bash
@@ -32,4 +35,13 @@ PATRIBOT_DATA_DIR=samples/bronze uv run python -m patribot.transform.bronze   # 
 uv run dbt build --project-dir dbt --profiles-dir dbt                          # silver + gold in warehouse/patribot.duckdb
 PATRIBOT_DATA_DIR=samples/bronze uv run dagster dev                            # or orchestrate it all in Dagster
 docker compose -f infra/docker-compose.yml --env-file .env up -d               # Postgres + pgvector (cp .env.example .env)
+```
+
+### Web app (`web/`, Node 22)
+```bash
+cd web && npm ci
+npm run dev:mock                                   # fixtures, no backend: http://localhost:3000
+npm run dev                                        # against NEXT_PUBLIC_API_BASE_URL (default http://localhost:8000/api/v1)
+npm run lint && npm run typecheck && npm test      # ESLint, tsc, Vitest
+npm run test:e2e                                   # Playwright smoke on a mock-mode production build
 ```
