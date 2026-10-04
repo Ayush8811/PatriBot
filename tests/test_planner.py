@@ -187,6 +187,17 @@ def test_split_itinerary_is_labelled_and_warned():
     assert plan(data, req2, today=MON).itineraries == []
 
 
+def test_split_drops_legs_whose_train_runs_origin_to_destination_itself():
+    data, _ = _split_data()
+    # a through train A1 -> HUB -> B1: as leg 1 you would stay on it, as leg 2 you would board it at A1
+    through = make_train("12345", "06:00", [("A1", None, 0), ("HUB", 300, 310), ("B1", 600, None)])
+    data = make_data([*data.trains.values(), through], data.delays)
+    cfg = PlannerConfig(leg2_options_per_leg1=10)
+    cands = split_options(data, frozenset({"A1"}), frozenset({"B1"}), [MON], EtaCache(data.delays), cfg)
+    assert cands  # the genuine splits (11111 then 2220x) survive
+    assert all("12345" not in {leg.train.train_no for leg in c.legs} for c in cands)
+
+
 # ---- hard and soft constraints --------------------------------------------------------------------------------
 
 

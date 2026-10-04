@@ -319,6 +319,18 @@ EXTRA_TRAINS: list[tuple[str, str, str, str, str, str, str, int, list[str], str]
         ["MON", "WED", "FRI"],
         "2A,3A,SL,GEN",
     ),
+    (  # pairs with 22998 at GAYA: a genuine split (neither train runs Kolkata -> Delhi itself)
+        "22997",
+        "Sample Gaya Delhi SF",
+        "SUPERFAST",
+        "Superfast",
+        "GAYA",
+        "NDLS",
+        "13:00",  # after 22998's predicted P90 arrival at GAYA (~06:00 + fallback delay) + 45 min buffer
+        720,
+        list(WEEKDAYS),
+        "2A,3A,SL",
+    ),
 ]
 DETAIL_TYPES = {"RAJDHANI": "Rajdhani", "DURONTO": "Duronto Express", "SHATABDI": "Shatabdi", "VANDE": "Vande Bharat"}
 

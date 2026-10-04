@@ -245,22 +245,32 @@ def split_options(
 ) -> list[Candidate]:
     """FR-7: two-leg itineraries via each corridor's split hubs. Leg 2 must depart the hub no earlier than leg 1's
     P90 arrival + `min_buffer_min` and no later than its P50 arrival + `max_layover_min`. Legs use the corridor's
-    member trains (all trains when the corridor has no membership data) and must be different trains."""
+    member trains (all trains when the corridor has no membership data) and must be different trains.
+
+    A split is pointless, and dropped, when either leg's train itself runs origin -> destination on the same run:
+    leg 1 would simply be stayed on, or leg 2 boarded at the origin (the direct search already offers that)."""
     out: list[Candidate] = []
     seen_hubs: set[str] = set()
     for corridor in corridors_between(data, origins, dests):
         members = [t for t in data.trains.values() if corridor.corridor_id in t.corridors]
         pool = members or list(data.trains.values())
+        through = {t.train_no for t in pool if board_alight(t, origins, dests) is not None}
         for hub in corridor.split_hubs:
             if hub in origins or hub in dests or hub in seen_hubs:
                 continue
             seen_hubs.add(hub)
             hub_set = frozenset({hub})
-            leg1s = direct_options(data, origins, hub_set, dates, etas, pool)
+            leg1s = [
+                l1
+                for l1 in direct_options(data, origins, hub_set, dates, etas, pool)
+                if l1.train.train_no not in through
+            ]
             if not leg1s:
                 continue
             leg2_trains = [
-                (t, pair) for t in pool if _usable(t) and (pair := board_alight(t, hub_set, dests)) is not None
+                (t, pair)
+                for t in pool
+                if t.train_no not in through and _usable(t) and (pair := board_alight(t, hub_set, dests)) is not None
             ]
             for l1 in leg1s:
                 lo = l1.arr_p90 + timedelta(minutes=cfg.min_buffer_min)
