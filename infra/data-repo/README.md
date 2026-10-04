@@ -12,3 +12,6 @@ or share its contents** (BRD D15).
 Workflows: `collect` (every 3 h), `watchlist` (weekly, or run it by hand) and `probe` (manual). The only setup is
 the secret `RAIL_API_KEY`. `collect` uses `watchlist.yaml` here when it exists, else the seed in the code repo. To tune
 the collector budget, edit the `collector:` block of `watchlist.yaml` here; rebuilds keep it.
+
+Hosting: `Dockerfile` + `render.yaml` build and serve the API on Render from this private repo. `deploy` workflow
+rebuilds it daily (needs the secret `RENDER_DEPLOY_HOOK`). See docs/deploy/render.md in the code repo.

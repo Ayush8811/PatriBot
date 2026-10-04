@@ -15,7 +15,7 @@ def main() -> None:
     uvicorn.run(
         "patribot.api.main:app",
         host=os.environ.get("PATRIBOT_API_HOST", "127.0.0.1"),
-        port=int(os.environ.get("PATRIBOT_API_PORT", "8000")),
+        port=int(os.environ.get("PATRIBOT_API_PORT") or os.environ.get("PORT") or "8000"),  # PORT: hosting platforms
         reload=os.environ.get("PATRIBOT_API_RELOAD", "") == "1",
     )
 
