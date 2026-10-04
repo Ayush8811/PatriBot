@@ -1,0 +1,75 @@
+# MVP corridors (BRD D4, D10; architecture doc §3).
+#
+# A corridor is a PATH, not an endpoint pair. `paths` lists the main-line waypoints (station codes) in the
+# A -> B direction. A train is a corridor member if it is a reserved train and its stopping pattern covers
+# >= membership.min_km of a path, or >= membership.min_consecutive_segments consecutive waypoint-to-waypoint
+# segments, in either direction. Membership is computed from timetable data in dbt (`dim_train_corridor`),
+# not here.
+#
+# Station codes and waypoints are a Phase 0 draft and must be confirmed against timetable data in Phase 1
+# (`verified: false`).
+
+membership:
+  min_km: 150
+  min_consecutive_segments: 2
+  exclude_train_types: [MEMU, DEMU, EMU, PASSENGER, UNRESERVED]
+
+clusters:
+  KOLKATA: [HWH, SDAH, KOAA, SRC, SHM]
+  DELHI: [NDLS, DLI, NZM, ANVT, DEE]
+  PATNA: [PNBE, RJPB, PPTA, DNR]
+  MUMBAI: [CSMT, MMCT, BDTS, LTT, DR]
+  BENGALURU: [SBC, YPR, SMVB]
+  HYDERABAD: [SC, HYB, KCG]
+  CHENNAI: [MAS, MS, TBM]
+
+corridors:
+  - id: KOL-DEL
+    name: Kolkata ↔ Delhi
+    a: KOLKATA
+    b: DELHI
+    primary: true
+    verified: false
+    paths:
+      grand_chord: [HWH, BWN, ASN, DHN, GAYA, DDU, PRYJ, CNB, TDL, ALJN, GZB, NDLS]
+      via_patna: [HWH, BWN, ASN, JSME, KIUL, PNBE, ARA, BXR, DDU, PRYJ, CNB, TDL, ALJN, GZB, NDLS]
+      via_lucknow: [HWH, BWN, ASN, DHN, GAYA, DDU, BSB, LKO, BE, MB, GZB, NDLS]  # confirm which trains use it
+    split_hubs: [ASN, DHN, GAYA, PNBE, DDU, PRYJ, CNB, LKO]
+
+  - id: DEL-PAT
+    name: Delhi ↔ Patna
+    a: DELHI
+    b: PATNA
+    verified: false
+    paths:
+      main: [NDLS, GZB, ALJN, TDL, CNB, PRYJ, DDU, BXR, ARA, PNBE]
+      via_lucknow: [NDLS, GZB, MB, BE, LKO, BSB, DDU, BXR, ARA, PNBE]
+    split_hubs: [CNB, PRYJ, DDU, LKO]
+
+  - id: MUM-DEL
+    name: Mumbai ↔ Delhi
+    a: MUMBAI
+    b: DELHI
+    verified: false
+    paths:
+      western: [MMCT, BVI, ST, BRC, RTM, KOTA, SWM, MTJ, NZM, NDLS]
+      central: [CSMT, KYN, NK, BSL, ET, BPL, VGLJ, GWL, AGC, MTJ, NZM, NDLS]
+    split_hubs: [BRC, RTM, KOTA, BPL, VGLJ]
+
+  - id: BLR-HYD
+    name: Bengaluru ↔ Hyderabad
+    a: BENGALURU
+    b: HYDERABAD
+    verified: false
+    paths:
+      main: [SBC, YPR, DMM, ATP, GTL, KRNT, MBNR, KCG, SC]
+    split_hubs: [DMM, GTL, KRNT]
+
+  - id: KOL-MAS
+    name: Kolkata ↔ Chennai
+    a: KOLKATA
+    b: CHENNAI
+    verified: false
+    paths:
+      east_coast: [HWH, KGP, BLS, BHC, CTC, BBS, KUR, BAM, VZM, VSKP, RJY, BZA, OGL, NLR, GDR, MAS]
+    split_hubs: [KGP, BBS, VSKP, BZA]

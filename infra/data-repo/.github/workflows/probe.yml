@@ -1,0 +1,43 @@
+name: probe
+
+# Manual check of the provider: past-date depth and response schema (docs/phase0/02-collector-setup.md).
+# Saves the output to probe/<date>/ in this private repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      train:
+        description: Train number
+        default: "12301"
+      days_back:
+        description: Past days to try
+        default: "7"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Ayush8811/PatriBot
+          ref: main
+          path: .code
+      - uses: astral-sh/setup-uv@v6
+      - name: Probe
+        env:
+          RAIL_API_KEY: ${{ secrets.RAIL_API_KEY }}
+        run: |
+          out="probe/$(date -u +%Y-%m-%d)"
+          mkdir -p "$out"
+          uv run --project .code --frozen patribot-collector probe --source "${{ vars.RAIL_SOURCE || 'railkit' }}" \
+            --train "${{ inputs.train }}" --days-back "${{ inputs.days_back }}" --samples-dir "$out" | tee "$out/summary.txt"
+      - name: Commit
+        run: |
+          git config user.name "patribot-collector"
+          git config user.email "patribot-collector@users.noreply.github.com"
+          git add probe && git commit -q -m "probe: $(date -u +%Y-%m-%dT%H:%MZ)" && git push -q || echo "nothing to commit"
