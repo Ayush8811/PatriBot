@@ -14,7 +14,7 @@ name: watchlist
 
 on:
   schedule:
-    - cron: "41 20 * * 0"  # Sundays 20:41 UTC (02:11 IST Monday)
+    - cron: "41 20 1 * *"  # monthly: 1st of the month 20:41 UTC (02:11 IST on the 2nd); timetables change rarely
   workflow_dispatch:
     inputs:
       max_calls:

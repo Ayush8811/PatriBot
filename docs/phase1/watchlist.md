@@ -27,7 +27,8 @@ root. The `collect` workflow uses that file when it exists, and `config/watchlis
    paths, and appears once in the watchlist with all its corridors.
 5. **Tiering.** Tier **A** = serves both end clusters of one of its corridors, or a premium train (Rajdhani,
    Shatabdi, Duronto, Vande Bharat, Tejas, Humsafar, matched on type or name including common abbreviations such as
-   SHTBDI). Everything else is tier **B**.
+   SHTBDI). Of the rest, tier **B** = halts at a station of either end cluster or at a split hub of one of its corridors
+   (a likely direct or split-journey leg); everything else is tier **C** (segment-delay signal only).
 6. **Collector fields.** `dep_time` = departure from origin; `journey_minutes` = `travel_time`, else derived from the
    route's first departure and last arrival and day numbers; `run_days` = running days at origin (daily if unknown,
    counted in the report).
@@ -55,7 +56,8 @@ Applied to discovery data and again to the schedule:
 - These calls come out of the same RailKit quota as the collector. On the Advance plan alone (10k), lower
   `max_calls_per_month` in the data repo's `watchlist.yaml` accordingly.
 - The report gives `estimated_collection_calls_per_month` (Σ runs/week × 30/7 per tier). If it exceeds
-  `max_calls_per_month`, the collector samples tier B, as designed.
+  `max_calls_per_month`, the collector samples tier B, then tier C, at fractional rates sized to the remaining budget
+  (B never below `1/max_tier_b_stride`, C never below `min_tier_c_rate`).
 
 ## How to run
 In the data repo: **Actions → watchlist → Run workflow** (optionally set `max_calls`). It also runs every Sunday at

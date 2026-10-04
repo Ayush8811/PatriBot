@@ -21,6 +21,7 @@ from patribot.watchlist.membership import (
     memberships,
     path_slots,
     serves_both_ends,
+    serves_end_or_hub,
 )
 
 DAYS_PER_MONTH = 30
@@ -50,7 +51,12 @@ def watched_train(
     name = sched.name or (summary.name if summary else "")
     train_type = sched.train_type or (summary.train_type if summary else "")
     both_ends = any(serves_both_ends(sched.stops, cfg, c) for c in corridors)
-    tier = "A" if both_ends or is_premium(name, train_type) else "B"
+    if both_ends or is_premium(name, train_type):
+        tier = "A"  # every run collected
+    elif any(serves_end_or_hub(sched.stops, cfg, c) for c in corridors):
+        tier = "B"  # a likely direct or split-journey leg: collected first after A
+    else:
+        tier = "C"  # segment-delay signal only: sampled with what is left of the budget
     journey = sched.journey_minutes
     if not sched.dep_time or not journey or journey <= 0:
         return None, False
@@ -147,22 +153,25 @@ def make_report(
             "total": len(members),
             "A": sum(t.tier == "A" for t in members),
             "B": sum(t.tier == "B" for t in members),
+            "C": sum(t.tier == "C" for t in members),
             "by_path": dict(paths),
         }
     tier_a = [t for t in trains if t.tier == "A"]
     tier_b = [t for t in trains if t.tier == "B"]
+    tier_c = [t for t in trains if t.tier == "C"]
     return {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": source.name,
         "complete": stopped is None,
         "stopped": stopped,
         "trains": len(trains),
-        "by_tier": {"A": len(tier_a), "B": len(tier_b)},
+        "by_tier": {"A": len(tier_a), "B": len(tier_b), "C": len(tier_c)},
         "by_corridor": by_corridor,
         "multi_corridor_trains": sum(len(t.corridors) > 1 for t in trains),
         "estimated_collection_calls_per_month": {
             "A": monthly_collection_calls(tier_a),
             "B": monthly_collection_calls(tier_b),
+            "C": monthly_collection_calls(tier_c),
             "total": monthly_collection_calls(trains),
         },
         "discovery": {
@@ -190,7 +199,8 @@ HEADER = """\
 # change config/corridors.yaml or the `collector:` block of the base watchlist and rebuild.
 #
 # Derived from RailKit timetable data: keep this file in the PRIVATE data repo, never in the public code repo (D15).
-# tier A = every run collected; tier B = sampled when the monthly budget is tight (architecture doc §4.2).
+# tier A = every run collected; B (serves an end cluster or split hub) then C (other members) are sampled to fit
+# the monthly budget, B first (architecture doc §4.2).
 # {summary}
 """
 
@@ -203,7 +213,8 @@ def render_watchlist(trains: list[WatchedTrain], collector: dict[str, Any], repo
     CollectorSettings.model_validate(collector)
     summary = (
         f"Generated {report['generated_at']}: {report['trains']} trains (A {report['by_tier']['A']}, "
-        f"B {report['by_tier']['B']}), ~{report['estimated_collection_calls_per_month']['total']} "
+        f"B {report['by_tier']['B']}, C {report['by_tier']['C']}), "
+        f"~{report['estimated_collection_calls_per_month']['total']} "
         f"running-status calls/month if every run is collected."
     )
     lines = [HEADER.format(summary=summary)]

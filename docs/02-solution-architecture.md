@@ -132,6 +132,11 @@ Phase 0:** about 500–700 distinct reserved trains across the 5 corridors after
 automatically switches Tier B to sampling when it is running ahead of budget. Sampled runs still give an unbiased
 picture of each train's delay distribution, just with fewer data points.
 
+**As built (D10, D16):** the first full watchlist build found about 1,900 member trains (≈ 23–28k calls/month at full
+collection), far above the estimate above. Tiers are now **A** (premium or serving both end clusters, ~345 trains,
+~5.4k calls/month, always collected), **B** (halts at an end cluster or split hub) and **C** (other members). B and
+then C are sampled at fractional rates sized to the remaining monthly budget.
+
 **Phase 0 provider spike:** compare 2–3 providers on:
 - (a) price at about 15–20k calls a month;
 - (b) how many days back they return past running status (this limits backfill);
