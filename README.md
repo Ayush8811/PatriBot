@@ -10,8 +10,8 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
 3. Phase 0: [API provider spike](docs/phase0/01-api-provider-spike.md) · [Collector setup (owner steps)](docs/phase0/02-collector-setup.md)
 
 ## Status
-**Phase 0, Foundations:** the corridor config, the budgeted collector and the CI/collector workflows are built. Provider: RailKit (D15). Waiting on
-the API sign-up and data-repo setup ([owner steps](docs/phase0/02-collector-setup.md)).
+**Phase 0, Foundations:** the corridor config, the budgeted collector (RailKit, D15), CI, and the data-repo workflows are built.
+Waiting on 3 owner steps: RailKit key, the private `patribot-data` repo, and one secret ([setup](docs/phase0/02-collector-setup.md)).
 
 ## Development
 ```bash

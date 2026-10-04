@@ -56,17 +56,17 @@ storage paths are S3-compatible, moving to cloud later is a configuration change
 train run *every day*. A laptop that's asleep breaks that, and missed days can't be recovered (most APIs only give a
 few days of past running status).
 
-**Collector design using only the GitHub account the project already has (D9):**
+**Collector design (D9, D14, D15):** the workflow lives in the **private** `patribot-data` repo. This code repo is
+public and RailKit data must not be published.
 
 | Piece | Choice |
 |---|---|
-| Scheduler and runner | **GitHub Actions** scheduled workflow in this repo, every 3 hours. Each run collects the train runs whose expected arrival has passed since the last run |
-| Raw storage | A **separate private repo** (`patribot-data`). Each run commits gzipped JSONL to `raw/<source>/<yyyy-mm-dd>/<hh>.jsonl.gz` |
-| Why a separate private repo | Raw API responses are usually **not redistributable** under provider terms, and this code repo may become public for the portfolio. It also keeps the code repo's history small |
-| Secrets | The railway API key and a fine-grained token (write access to `patribot-data` only) are stored as GitHub Actions secrets |
-| Size | About 15k responses/month × ~15 KB ≈ 225 MB raw, ≈ 25–35 MB gzipped per month. Fine for years at GitHub's recommended repo sizes. Monthly compaction to Parquet if needed |
-| Actions minutes | About 8 runs/day × ~3 min ≈ 720 min/month. Free for public repos and within the 2,000 free minutes/month for private repos |
-| Monitoring | The workflow fails loudly (GitHub email) on API errors, and a daily summary file records calls used and gaps |
+| Scheduler and runner | **GitHub Actions** in `patribot-data` (template in `infra/data-repo/`), every 3 hours. It checks out this repo's `main` and runs `patribot-collector run` |
+| Raw storage | The same private repo: `raw/<source>/running_status/collected_date=<yyyy-mm-dd>/<hhmmss>Z.jsonl.gz` |
+| Auth | The built-in `GITHUB_TOKEN` (no personal access token). The only secret is `RAIL_API_KEY` |
+| Size | About 15–30k responses/month, ≈ 30–60 MB gzipped per month. Monthly compaction to Parquet if needed |
+| Actions minutes | About 700–900 min/month, within the 2,000 free minutes for private repos |
+| Monitoring | A failing run emails the owner. `state/usage/` tracks calls against budget. A `probe` workflow checks the provider |
 | Swappable | Storage goes through `fsspec`, so moving to R2, S3 or GCS later changes only configuration |
 
 The local stack runs `git pull` on `patribot-data` (a Dagster sensor) and processes new files from there.
@@ -376,9 +376,9 @@ PatriBot/
 ├── api/                       # FastAPI service                                     Phase 2
 ├── web/                       # Next.js app                                         Phase 3
 ├── evals/                     # golden queries and eval runner                      Phase 4
-├── infra/                     # docker-compose, Dockerfiles                         Phase 1
+├── infra/                     # data-repo workflows (✅ Phase 0), docker-compose (Phase 1)
 ├── tests/
-└── .github/workflows/         # ci.yml, collector.yml                               ✅ Phase 0
+└── .github/workflows/         # ci.yml                                              ✅ Phase 0
 ```
 
 ## 12. Security and compliance
