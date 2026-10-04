@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Desk research done. Hands-on verification needs owner sign-ups (see §4)** |
+| Status | **Decided: RailKit (D15). Its terms are set aside for the POC only (see §2b and the BRD decisions log)** |
 | Budget | ≤ ₹500/month (D1). Estimated need: **14–19k running-status calls/month** (architecture doc §4.2) |
 | Date | 2026-10-04 |
 
@@ -71,7 +71,10 @@ taint the dataset's provenance, which defeats D5 (selling to ConfirmTkt or ixigo
 **request-time features inside our own app** (e.g. live status for nowcasts, short-term caching only), or with
 **written permission** from its developer.
 
-## 3. Recommendation
+**Owner decision (D15):** use RailKit anyway for the POC, setting the terms aside. Consequences and mitigations are
+recorded in the BRD decisions log (D15).
+
+## 3. Recommendation (superseded by D15; kept for the record)
 
 1. **Primary candidate: IndianRailAPI.com.** Its flat ₹500/month matches the budget exactly, it has commercial
    plans, and its endpoint shape is known. Start on the **free test account** to validate.

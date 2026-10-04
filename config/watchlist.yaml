@@ -9,7 +9,7 @@
 
 collector:
   timezone: Asia/Kolkata
-  max_calls_per_month: 15000
+  max_calls_per_month: 9000     # RailKit Advance = 10k/month, minus 10% headroom; 27000 with a 20k request pack
   lookback_days: 3          # set to the provider's verified past-date depth after the probe
   grace_hours: 6            # wait this long after scheduled arrival before collecting
   max_attempts: 3           # per run, for retryable outcomes

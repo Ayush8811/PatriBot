@@ -20,6 +20,7 @@ from patribot.collector.store import DataStore
 from patribot.sources.base import FetchStatus, RawResponse, RunningStatusSource
 from patribot.sources.registry import SOURCES, get_source
 
+STOP_HTTP_STATUSES = {401, 403, 429}
 DEFAULT_WATCHLIST = Path(__file__).resolve().parents[3] / "config" / "watchlist.yaml"
 
 
@@ -60,12 +61,22 @@ def cmd_plan(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     _, store, now, plan = _plan(args)
     source: RunningStatusSource = get_source(args.source)
-    responses: list[RawResponse] = [source.fetch_run_status(r.train_no, r.start_date) for r in plan.selected]
+    responses: list[RawResponse] = []
+    stopped = None
+    for r in plan.selected:
+        resp = source.fetch_run_status(r.train_no, r.start_date)
+        responses.append(resp)
+        if resp.http_status in STOP_HTTP_STATUSES:
+            # bad key or quota/rate limit: further calls would fail too; the rest stay due for the next run
+            stopped = f"stopped after HTTP {resp.http_status}"
+            break
     path = store.write_batch(responses, now.astimezone(UTC), now.date())
     counts = {s.value: sum(r.status is s for r in responses) for s in FetchStatus}
-    print(json.dumps(_summary(plan, {"fetched": counts, "file": str(path) if path else None}), indent=2))
-    # fail the workflow (=> GitHub email) when every call errored: likely a bad key or provider outage
-    return 1 if responses and counts[FetchStatus.ERROR.value] == len(responses) else 0
+    extra = {"fetched": counts, "stopped": stopped, "file": str(path) if path else None}
+    print(json.dumps(_summary(plan, extra), indent=2))
+    # fail the workflow (=> GitHub email) on a bad key, exhausted quota, or when every call errored
+    all_failed = bool(responses) and counts[FetchStatus.ERROR.value] == len(responses)
+    return 1 if all_failed or stopped else 0
 
 
 def cmd_probe(args: argparse.Namespace) -> int:

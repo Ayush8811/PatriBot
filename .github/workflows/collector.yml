@@ -7,7 +7,7 @@ name: collector
 #   secrets.RAIL_API_KEY       railway data API key
 #   secrets.DATA_REPO_TOKEN    fine-grained token: Contents read/write on the data repo only
 #   vars.DATA_REPO             e.g. ayush8811/patribot-data
-#   vars.RAIL_SOURCE           e.g. indianrailapi   (defaults to "fixture", which makes no API calls)
+#   vars.RAIL_SOURCE           railkit   (defaults to "fixture", which makes no API calls)
 
 on:
   schedule:
@@ -24,7 +24,7 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       HAS_DATA_REPO: ${{ secrets.DATA_REPO_TOKEN != '' && vars.DATA_REPO != '' }}
     steps:
@@ -49,6 +49,7 @@ jobs:
         if: env.HAS_DATA_REPO == 'true'
         env:
           RAIL_API_KEY: ${{ secrets.RAIL_API_KEY }}
+          RAIL_MIN_INTERVAL_S: ${{ vars.RAIL_MIN_INTERVAL_S || '1.1' }}
         run: uv run --frozen patribot-collector run --data-dir data --source "${{ vars.RAIL_SOURCE || 'fixture' }}"
 
       - name: Commit to data repo

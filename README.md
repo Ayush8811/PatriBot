@@ -10,7 +10,7 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
 3. Phase 0: [API provider spike](docs/phase0/01-api-provider-spike.md) · [Collector setup (owner steps)](docs/phase0/02-collector-setup.md)
 
 ## Status
-**Phase 0, Foundations:** the corridor config, the budgeted collector and the CI/collector workflows are built. Waiting on
+**Phase 0, Foundations:** the corridor config, the budgeted collector and the CI/collector workflows are built. Provider: RailKit (D15). Waiting on
 the API sign-up and data-repo setup ([owner steps](docs/phase0/02-collector-setup.md)).
 
 ## Development
