@@ -7,3 +7,5 @@ __pycache__/
 # local checkout of the private patribot-data repo and probe output
 data/
 samples/
+# agent worktrees (local only)
+.claude/worktrees/
