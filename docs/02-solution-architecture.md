@@ -191,10 +191,17 @@ separate disruption table.
   DuckDB table. A Python step (`patribot.transform`, provider parsers) picks one envelope per run and writes Parquet
   `silver_input/{runs,stops}`; dbt starts from there. Parsing provider JSON stays in Python, where it is unit-tested.
 - **Silver** is `stg_train_run` (one row per attempted run, including not-found and error runs) and
-  `stg_train_run_stop`. `stg_train_schedule` and `stg_station` wait for a timetable source.
+  `stg_train_run_stop`. The timetable comes from the watchlist build's cached RailKit responses (no extra API
+  calls): `patribot.transform.timetable` writes Parquet, dbt builds `stg_train_schedule` and `stg_train_info`. There is
+  no separate `stg_station`; `dim_station` takes names and coordinates from the data.
 - **Gold** adds `fct_run_summary` (per run: origin departure delay, final arrival delay, journey time actual vs.
-  scheduled, `run_state`). `dim_station_cluster` maps each station to its city cluster. `dim_train` is a running-data
-  view, not SCD-2 yet. `dim_train_corridor`, `feat_eta_training`, `route_graph_edges` and `fct_eta_forecast` come later.
+  scheduled, `run_state`). `dim_station_cluster` maps each station to its city cluster. `dim_train` combines the
+  timetable and running data (latest schedule wins, not SCD-2 yet). `dim_train_schedule` holds stop times as minutes
+  from the origin departure. `dim_train_corridor` lands in dbt, but the D10 rule itself runs in Python
+  (`patribot.watchlist.membership`, the same code that builds the watchlist) so the two cannot disagree.
+  `agg_delay_stats_all`, `agg_train_delay_stats` and `agg_corridor_delay_stats` are the baseline ETA's fallback levels.
+  `dim_date` comes from a hand-kept calendar seed (holidays, festival windows, fog season). Weather,
+  `feat_eta_training`, `route_graph_edges` and `fct_eta_forecast` come later.
 - **Outliers** are flagged (`is_disruption`, var `delay_outlier_min`, default 720 min) and kept in the fact tables
   rather than moved to a separate disruption table. Only `is_delay_target` rows feed `agg_delay_stats`.
 - **Rescheduled departures** are not detected yet. The RailKit history payload has no field for them.
@@ -252,6 +259,17 @@ score = w1·norm(predicted_journey_time_p50)
 ```
 Weights come from the parsed intent: "least travel time" raises w1, and "must reach by" turns into a hard P90
 constraint. Every score component is returned to the UI for explainability (NFR-7).
+
+**As built in Phase 2** ([details](phase2/planner-api.md)); differences from the plan above:
+- There is no `fct_eta_forecast` yet. The planner computes the `baseline_hist` ETA at request time from the `agg_*`
+  delay tables (train × station × month, then all months, then the train's and the corridor's final delay scaled by
+  route fraction, then zero), on an in-memory snapshot of the gold tables read from DuckDB or Postgres `serving`.
+- Score components are expressed as 0..1 "higher is better" values (`journey_time`, `reliability`, `preference`,
+  `transfer`) and the score is their weighted sum, which is the formula above with the penalties inverted. The
+  objective (`fastest`, `most_reliable`, `balanced`) picks the weights.
+- Splits are two legs via the curated hubs, all labelled split itineraries (separate tickets). Official break
+  journeys need fare rules and come later; so does the Connection Scan Algorithm.
+- The result list is diversified (best date per distinct train first).
 
 ## 8. Agent and RAG (detail in doc 05)
 
