@@ -106,13 +106,13 @@ export function TrainView({ trainNo }: { trainNo: string }) {
 
       <section aria-label="Headline numbers" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Runs analysed" value={p ? String(p.runs) : "–"} />
-        <Stat label="Within 30 min" value={p && p.runs > 0 ? `${Math.round(p.on_time_pct)}%` : "–"} />
+        <Stat label="Runs within 30 min" value={p && p.runs > 0 ? `${Math.round(p.on_time_pct)}%` : "–"} />
         <Stat label="Typical final delay" value={latest ? formatDelayShort(latest.final_delay_p50) : "–"} hint="P50, latest month" />
         <Stat label="Late case" value={latest ? formatDelayShort(latest.final_delay_p90) : "–"} hint="P90, latest month" />
       </section>
 
       {p && p.runs > 0 && (
-        <ReliabilityBadge reliability={p.on_time_pct / 100} historyRuns={p.runs} />
+        <ReliabilityBadge reliability={p.on_time_pct / 100} historyRuns={p.runs} observed />
       )}
       {runsBehind === 0 && (
         <Alert>

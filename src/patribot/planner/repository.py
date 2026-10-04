@@ -30,6 +30,7 @@ from patribot.planner.model import (
     Stop,
     Train,
 )
+from patribot.planner.names import display_train_name
 
 DUCKDB_TABLES = {
     "dim_station": "gold.dim_station",
@@ -136,6 +137,7 @@ class SqlRepository:
             if r["origin_dep_clock_min"] is not None:
                 origin_clock[r["train_no"]] = int(r["origin_dep_clock_min"])
 
+        codes = set(stations)
         trains = {}
         for r in self._q(
             "select train_no, train_name, train_type, origin_code, destination_code, running_days, classes, route_km,"
@@ -145,7 +147,7 @@ class SqlRepository:
             days = _split(r["running_days"])
             trains[no] = Train(
                 train_no=no,
-                name=r["train_name"] or no,
+                name=display_train_name(r["train_name"], codes) or no,
                 stops=tuple(stops.get(no, ())),
                 origin_dep_clock_min=origin_clock.get(no, 0),
                 running_days=frozenset(days) if days else None,

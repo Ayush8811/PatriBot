@@ -96,7 +96,7 @@ describe("ItineraryCard (direct)", () => {
     expect(within(card).getByRole("img", { name: /Likely arrival 10:38; late case \(P90\) 11:20/ })).toBeInTheDocument();
     expect(within(card).getByText("Overnight")).toBeInTheDocument();
     expect(within(card).getByText("based on 41 runs")).toBeInTheDocument();
-    expect(within(card).getByText(/Often late · 74% within 30 min/)).toBeInTheDocument();
+    expect(within(card).getByText(/Often late · ~74% chance within 30 min/)).toBeInTheDocument();
   });
 
   it("links to IRCTC in a new tab and to the train page", () => {
