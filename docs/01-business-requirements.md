@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | 01 — Business Requirements |
-| Status | **v0.2: decisions from review applied (see §13)** |
+| Status | **v0.3: review round 2 applied (D1–D11, see §13)** |
 | Next documents | 02 — Solution Architecture, 03 — Data Design, 04 — ML (ETA) Design, 05 — RAG / Agent Design |
 | Scope | Indian Railways (IR) passenger trains, reserved classes |
 
@@ -71,8 +71,13 @@ These are the "golden" queries. The finished system must handle them end to end.
 
 ### 5.1 In scope (MVP)
 
-- **Geography:** **4 MVP corridors**: Kolkata ↔ Delhi (primary), Delhi ↔ Patna, Mumbai ↔ Delhi,
-  Bengaluru ↔ Hyderabad. The rationale is in the solution architecture doc, §3. Design must scale to all-India.
+- **Geography:** **5 MVP corridors**: Kolkata ↔ Delhi (primary), Delhi ↔ Patna, Mumbai ↔ Delhi,
+  Bengaluru ↔ Hyderabad, Kolkata ↔ Chennai. Design must scale to all-India.
+- **What a corridor includes (D10):** a corridor is **not** just the trains between its two end cities. It
+  covers **every reserved train that runs along the corridor's main-line path**, including trains that start or
+  end at intermediate stations (e.g. Patna → Delhi, Asansol → Kanpur and Dhanbad → New Delhi all belong to
+  Kolkata ↔ Delhi). This is needed for split-journey planning (leg 1 and leg 2 are often such trains) and lets the
+  ETA model learn delays segment by segment. The exact rule is in the solution architecture doc, §3.
 - **Train search:** station and city resolution, direct trains, date-range search, filters (overnight,
   departure/arrival windows, class, train type such as Rajdhani, Duronto or Vande Bharat Sleeper).
 - **ETA and delay prediction:** per train × station × date, predicted delay distribution (P50, P90), and
@@ -85,6 +90,9 @@ These are the "golden" queries. The finished system must handle them end to end.
   and historical performance summaries.
 - **Conversational interface:** a chat UI and a REST API.
 - **Explainability:** every recommendation has a short rationale and source citations.
+- **Accounts and plans (D8):** sign-in, a **free tier** (unlimited form search plus a small daily allowance of
+  AI chat queries) and a **paid tier at ₹100/month for up to 50 AI chat queries**. Payment collection may
+  come after the POC, but usage metering and quotas are built from the start.
 
 ### 5.2 Phase 2 (post-MVP)
 
@@ -96,7 +104,8 @@ These are the "golden" queries. The finished system must handle them end to end.
 
 ### 5.3 Out of scope
 
-- **Ticket booking or payment.** We deep-link to IRCTC only. We never handle credentials.
+- **Ticket booking.** We deep-link to IRCTC only. We never handle IRCTC credentials. Our only payment is the
+  ₹100/month subscription, through a payment gateway (we never store card or UPI details).
 - Unreserved or general-class and suburban/local trains.
 - Freight.
 
@@ -141,7 +150,12 @@ These are the "golden" queries. The finished system must handle them end to end.
 |---|---|---|
 | FR-19 | A proper web app (not Streamlit), with a chat UI and itinerary cards (train, date, departure, scheduled vs. predicted arrival, reliability badge, IRCTC deep link) | Must |
 | FR-20 | A REST API: `/search`, `/plan`, `/predict-eta`, `/chat` | Must |
-| FR-21 | An admin and observability dashboard covering pipeline freshness, model metrics and query logs | Should |
+| FR-21 | An admin and observability dashboard covering pipeline freshness, model metrics, query logs and **LLM spend** | Should |
+| FR-22 | Sign-in (Google or phone OTP) and a user profile with plan, quota used and quota remaining | Must |
+| FR-23 | **Quota metering:** each AI chat query counts as 1 "call". Free tier: N calls per day (default 3). Paid: 50 calls per month. The structured search form never uses quota | Must |
+| FR-24 | A **global LLM spend guard**: free-tier AI chat pauses for the day (form search keeps working) once the day's share of the monthly budget is used up | Must |
+| FR-25 | Paid-plan subscription through a payment gateway (e.g. Razorpay), with webhooks updating the plan | Should (POC: manual or coupon-based activation is acceptable) |
+| FR-26 | Ad slots (e.g. Google AdSense) on search and result pages, behind a feature flag and off during the POC | Could |
 
 ## 7. Data requirements
 
@@ -169,8 +183,8 @@ or labelled as such), and outlier handling.
 | NFR-2 | Freshness | Timetable ≤ 7 days old. Historical delays loaded by T+1. Live data ≤ 15 min old (when enabled) |
 | NFR-3 | Accuracy | ETA MAE (final destination, forecast mode) ≥ 40 % better than the scheduled-time baseline. P90 coverage within 85–95 % |
 | NFR-4 | Reliability | Pipelines are idempotent and re-runnable, with backfill support. API uptime 99 % (best effort) |
-| NFR-5 | Cost | Data API spend ≤ **₹500/month**. Runs local-first on Docker; cloud deployment comes later. LLM cost per query is tracked and capped (see the solution architecture doc, §9) |
-| NFR-6 | Compliance | Use only data sources whose terms allow it. Respect robots.txt and rate limits. Store no PII beyond optional anonymous session IDs. Keep a **provenance record for every dataset**, which a future acquirer's IP due diligence will need |
+| NFR-5 | Cost | Data API spend ≤ **₹500/month**. **Claude API spend ≤ ₹500/month** in the POC. Runs local-first on Docker; cloud deployment comes later. **The LLM cost of an AI chat query must stay well under ₹2** (₹100 ÷ 50 calls), so the paid tier at least breaks even. See the solution architecture doc, §9 |
+| NFR-6 | Compliance | Use only data sources whose terms allow it. Respect robots.txt and rate limits. Store only the PII that accounts need (name, email or phone) and follow India's **DPDP Act 2023** (consent, privacy policy, deletion on request). Keep a **provenance record for every dataset**, which a future acquirer's IP due diligence will need |
 | NFR-7 | Explainability | Every ranking factor is visible to the user. Model feature importances are documented |
 | NFR-8 | Observability | Data-quality checks, pipeline run logs, model drift monitoring, and LLM traces (prompt, tools, latency, cost) |
 | NFR-9 | Reproducibility | Versioned data snapshots, models and prompts. Infrastructure as code. One-command local setup |
@@ -212,9 +226,11 @@ or labelled as such), and outlier handling.
 
 ## 12. Release plan (proposed)
 
+The phases are **milestone-based, not calendar-based** (D11). Each phase is done when its exit criteria are met.
+
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **0 — Foundations** | Repo, docs, source evaluation, start of the daily data collection job | Data sources confirmed. History collection running daily |
+| **0 — Foundations** | Repo, docs, source evaluation, start of the daily data collection job | Data sources confirmed. History collection running daily. **This is the only phase with a hard deadline: start as soon as possible, because every day without collection is lost training data** |
 | **1 — Data platform** | Ingestion → bronze/silver/gold, station and train masters, timetable, historical runs, quality checks, orchestration | Gold tables for the Kolkata ↔ Delhi corridor with ≥ 3 months of history (or a backfill) |
 | **2 — ETA model v1** | Baselines, then a gradient-boosted / quantile model, served via API, with an evaluation report | KPIs in §9 met on the corridor |
 | **3 — Search and planner** | Direct and split itinerary engine, ranking, `/search` and `/plan` APIs | Q1–Q3 pass |
@@ -229,10 +245,14 @@ or labelled as such), and outlier handling.
 | D1 | Data sourcing | Paid API is allowed, **≤ ₹500/month** | Use a freemium/paid railway API for timetables and running status, plus open data. Call volume must fit the budget (see the solution architecture doc, §4) |
 | D2 | Stack | **Local-first**, cloud later | Docker Compose. Storage and compute stay cloud-portable (S3-compatible paths, dbt, containers). The daily data collector is the one exception: it must run every day, so it gets a tiny always-on runner |
 | D3 | LLM | **Claude** (Anthropic API) | Tool-use agent through the Anthropic Python SDK. Embeddings come from a local open-source model, since Anthropic has no embeddings endpoint |
-| D4 | MVP corridors | **3–4 corridors** | Kolkata ↔ Delhi, Delhi ↔ Patna, Mumbai ↔ Delhi, Bengaluru ↔ Hyderabad |
+| D4 | MVP corridors | **5 corridors** (revised in round 2) | Kolkata ↔ Delhi, Delhi ↔ Patna, Mumbai ↔ Delhi, Bengaluru ↔ Hyderabad, **Kolkata ↔ Chennai** |
 | D5 | Audience | Portfolio now. **Long term, sell to ConfirmTkt / ixigo-class companies** | API-first and B2B-ready. Data sources sit behind adapters so a buyer can plug in their own data. Measurable accuracy benchmarks. Clean data provenance (see §15) |
 | D6 | Waitlist-confirmation model | **Not now** | Moved to the backlog |
 | D7 | UI | **Proper web app** | Next.js + TypeScript frontend calling a FastAPI backend |
+| D8 | LLM budget and monetisation | **Claude spend ≤ ₹500/month** in the POC. Free tier plus **₹100/month for 50 AI chat queries**. Google ads later if it takes off | Low-cost AI pipeline instead of an open-ended agent loop for most queries (solution architecture doc, §8–9). Accounts, quotas and a spend guard are now in scope (FR-22–26) |
+| D9 | Always-on collector infra | No GitHub Actions + Cloudflare R2 setup yet | Collector runs on the GitHub account the project already uses (Actions is included with it), storing raw files in a **separate private GitHub repo**. No new accounts needed. Storage stays swappable to S3/R2 later (solution architecture doc, §2) |
+| D10 | Corridor definition | A corridor = **every train along the path between the two clusters**, including trains that start or end at intermediate stations | More trains per corridor. The data-API budget is managed through train-type filters and sampling (solution architecture doc, §4) |
+| D11 | Timeline | "Depends" on available time | Phases are milestone-based. Only the collector start date is urgent |
 
 ## 14. Glossary
 

@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Document | 02 — Solution Architecture |
-| Status | **Draft v0.1, for review** |
-| Inputs | [01 — Business Requirements v0.2](01-business-requirements.md), decisions D1–D7 |
+| Status | **v0.2: round-2 decisions applied (D8–D11)** |
+| Inputs | [01 — Business Requirements v0.3](01-business-requirements.md), decisions D1–D11 |
 | Next | 03 — Data Design (schemas, contracts), 04 — ETA Model Design, 05 — Agent and RAG Design |
 
 ---
@@ -31,13 +31,13 @@
                 ┌─────────────────────────── APP PLANE ────────────────────────────────▼─┐
                 │  FastAPI                                                               │
                 │   ├─ /search, /plan, /predict-eta  ─► Planner engine (deterministic)   │
-                │   └─ /chat ─► Claude agent (tool use) ─► tools = planner, ETA, RAG     │
+                │   └─ /chat ─► Claude: parse ─► planner ─► explain (low-cost path, §8)│
                 │  Next.js web app  ◄── SSE streaming ──                                 │
                 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Guiding principles**
-1. **The LLM orchestrates and the code computes.** Claude parses the request, calls tools and explains the result.
+1. **The LLM parses and explains, and the code computes.** Claude turns the request into a structured intent and explains the result.
    Train lists, times, predictions and rankings always come from deterministic code and data. The LLM never invents
    a train.
 2. **Data sources are plug-ins.** Every external feed sits behind an adapter interface, so a buyer (D5) can swap in
@@ -47,33 +47,57 @@
 4. **Local-first and cloud-portable.** Everything runs in Docker Compose. Every component has a managed-cloud
    equivalent (§10).
 
-## 2. Is local-first OK? (D2)
+## 2. Is local-first OK? (D2, D9)
 
 **Yes, it's the right choice for this phase.** It costs nothing, iterates fast, and if the stack is containerised and
 storage paths are S3-compatible, moving to cloud later is a configuration change, not a rewrite.
 
 **One exception: the data collector.** The ETA model's training history only builds up if we capture every
 train run *every day*. A laptop that's asleep breaks that, and missed days can't be recovered (most APIs only give a
-few days of past running status). So:
+few days of past running status).
 
-| Component | Where it runs | Cost |
-|---|---|---|
-| **Collector** (daily API pulls → raw JSON) | **GitHub Actions scheduled workflow** (or any free always-on micro VM), writing to **Cloudflare R2** (S3-compatible) | Free tier is enough |
-| Everything else (Dagster, dbt, DuckDB, Postgres, MLflow, API, web) | Local Docker Compose | ₹0 |
+**Collector design using only the GitHub account the project already has (D9):**
 
-The local stack syncs raw files down from R2 and processes them. Collection never depends on your laptop.
+| Piece | Choice |
+|---|---|
+| Scheduler and runner | **GitHub Actions** scheduled workflow in this repo, every 3 hours. Each run collects the train runs whose expected arrival has passed since the last run |
+| Raw storage | A **separate private repo** (`patribot-data`). Each run commits gzipped JSONL to `raw/<source>/<yyyy-mm-dd>/<hh>.jsonl.gz` |
+| Why a separate private repo | Raw API responses are usually **not redistributable** under provider terms, and this code repo may become public for the portfolio. It also keeps the code repo's history small |
+| Secrets | The railway API key and a fine-grained token (write access to `patribot-data` only) are stored as GitHub Actions secrets |
+| Size | About 15k responses/month × ~15 KB ≈ 225 MB raw, ≈ 25–35 MB gzipped per month. Fine for years at GitHub's recommended repo sizes. Monthly compaction to Parquet if needed |
+| Actions minutes | About 8 runs/day × ~3 min ≈ 720 min/month. Free for public repos and within the 2,000 free minutes/month for private repos |
+| Monitoring | The workflow fails loudly (GitHub email) on API errors, and a daily summary file records calls used and gaps |
+| Swappable | Storage goes through `fsspec`, so moving to R2, S3 or GCS later changes only configuration |
 
-## 3. MVP corridors (D4)
+The local stack runs `git pull` on `patribot-data` (a Dagster sensor) and processes new files from there.
 
-| # | Corridor | Station cluster A | Station cluster B | Why |
-|---|---|---|---|---|
-| 1 | **Kolkata ↔ Delhi** | HWH, SDAH, KOAA, SRC | NDLS, DLI, NZM, ANVT, DEE | Primary demo (golden query Q1). Premium trains (Rajdhani, Duronto). Fog-prone |
-| 2 | **Delhi ↔ Patna** | NDLS, DLI, ANVT, NZM | PNBE, RJPB, PPTA, DNR | Among the worst-delayed and most rush-hit corridors (Chhath and post-Diwali). Shares track with #1, so segment-level learning transfers, and Patna is a natural **split-journey hub** for #1 |
-| 3 | **Mumbai ↔ Delhi** | CSMT, MMCT, BDTS, LTT | NDLS, NZM, DLI | Different zones and operating behaviour (Western/Central). Tests generalisation |
-| 4 | **Bengaluru ↔ Hyderabad** | SBC, YPR, SMVB | SC, HYB, KCG | A southern, mostly overnight corridor with lower fog risk. A contrast case for the model |
+## 3. MVP corridors (D4, D10)
 
-Station codes and train lists are **confirmed during Phase 0** from the timetable source. Expect roughly 150–250
-distinct train numbers in total, including intermediate hubs.
+### 3.1 Corridors
+| # | Corridor | Cluster A | Cluster B | Main-line path(s) (to confirm in Phase 0) | Why |
+|---|---|---|---|---|---|
+| 1 | **Kolkata ↔ Delhi** | HWH, SDAH, KOAA, SRC, SHM | NDLS, DLI, NZM, ANVT, DEE | (a) Grand Chord: Asansol–Dhanbad–Gaya–DDU–Prayagraj–Kanpur. (b) Via Patna: Barddhaman–Jasidih–Kiul–Patna–Buxar–DDU. (c) Via Varanasi–Lucknow–Moradabad, for the trains that use it | Primary demo (Q1). Rajdhani, Duronto. Fog-prone |
+| 2 | **Delhi ↔ Patna** | NDLS, DLI, ANVT, NZM | PNBE, RJPB, PPTA, DNR | Mostly a subset of 1(b) | Heavy delays and rush periods. **Almost no extra data cost**, because its trains are already in corridor 1 |
+| 3 | **Mumbai ↔ Delhi** | CSMT, MMCT, BDTS, LTT, DR | NDLS, NZM, DLI | (a) Western: Surat–Vadodara–Ratlam–Kota–Mathura. (b) Central: Bhusaval–Itarsi–Bhopal–Jhansi–Agra | Different zones (Western/Central). Tests generalisation |
+| 4 | **Bengaluru ↔ Hyderabad** | SBC, YPR, SMVB | SC, HYB, KCG | Dharmavaram–Anantapur–Guntakal–Kurnool–Mahbubnagar | Southern overnight corridor. Low fog. Contrast case |
+| 5 | **Kolkata ↔ Chennai** | HWH, SHM, SRC, KOAA | MAS, MS, MMCC, TBM | East Coast: Kharagpur–Balasore–Bhubaneswar–Visakhapatnam–Vijayawada–Gudur | Long (about 1,650 km) overnight-plus journeys. Cyclone and monsoon effects. Shares the Kolkata cluster with corridor 1 |
+
+### 3.2 Which trains belong to a corridor (D10)
+A corridor is a **path**: an ordered list of main-line segments between junctions, possibly with alternative
+paths. A train belongs to the corridor in a given direction if **all** of the following are true:
+1. It is a **reserved train**: Mail/Express, Superfast, Rajdhani, Shatabdi, Duronto, Vande Bharat, Humsafar,
+   Garib Rath, etc. MEMU, DEMU, EMU, passenger and unreserved-only services are excluded (BRD §5.3).
+2. Its stopping pattern covers **≥ 150 km** of the corridor path, or **≥ 2 consecutive corridor segments**, in the
+   corridor's direction.
+3. It can therefore start or end **anywhere** on the path or beyond it. For example, Patna → New Delhi,
+   Dhanbad → New Delhi, Asansol → Kanpur and Howrah → Amritsar (passing through) are all members of corridor 1.
+
+Membership is computed from the timetable by a dbt model, `dim_train_corridor`, and recomputed weekly. A train can
+belong to several corridors (e.g. 1 and 2) but is **collected only once**, because one running-status call returns
+every stop.
+
+**Planner use:** split-journey legs are drawn from the corridor's member trains. **Model use:** delays are learned
+per **segment** as well as per train, so intermediate-origin trains add training signal for the trunk route.
 
 ## 4. Data sourcing and budget (D1)
 
@@ -91,17 +115,29 @@ Concrete adapters: `RapidApiRailAdapter`, `IndianRailApiAdapter` (both candidate
 
 ### 4.2 Call budget (≤ ₹500/month ≈ $6)
 
+The wider corridor definition (D10) increases the train count. **Rough estimate, to be replaced by real counts in
+Phase 0:** about 500–700 distinct reserved trains across the 5 corridors after de-duplication.
+
 | Pull | Frequency | Volume / month (est.) |
 |---|---|---|
-| Running status: one call per completed train run (returns every stop) | Daily, after the expected arrival | ~150 trains × ~0.8 runs/day × 30 ≈ **3,600** |
-| Retry and gap fill | As needed | ~400 |
-| Timetable refresh for corridor trains | Weekly | ~1,000 |
-| Live status for nowcast (demo only, on request, cached 5 min) | On demand | ~500 |
-| **Total** | | **≈ 5,500 calls/month** |
+| Running status, **Tier A**: trains serving both end clusters, plus premium trains (Rajdhani, Duronto, Vande Bharat, Shatabdi) | Every run | ~250 trains × ~0.75 runs/day × 30 ≈ **5,600** |
+| Running status, **Tier B**: other corridor member trains (intermediate origin or destination) | Every run if the budget allows, else **every 2nd run** | ~400 × 0.75 × 30 ≈ 9,000, or **~4,500 sampled** |
+| Retries and gap fill | As needed | ~800 |
+| Timetable refresh (corridor membership + schedules) | Weekly | ~2,800 |
+| Live status for nowcast (on request, cached 5 min) | On demand | ~500 |
+| **Total** | | **≈ 14,000–19,000 calls/month** |
 
-**Phase 0 spike:** compare 2–3 providers on (a) price for about 6k calls a month, (b) how many days back they
-return past running status (that limits backfill), (c) schema completeness, and (d) terms of use permitting storage
-and derived models. Choose the cheapest one that passes all four.
+**Budget control:** the collector reads a `max_calls_per_month` setting, spreads it evenly across the month, and
+automatically switches Tier B to sampling when it is running ahead of budget. Sampled runs still give an unbiased
+picture of each train's delay distribution, just with fewer data points.
+
+**Phase 0 provider spike:** compare 2–3 providers on:
+- (a) price at about 15–20k calls a month;
+- (b) how many days back they return past running status (this limits backfill);
+- (c) schema completeness (all stops, actual arrival and departure, cancellation and diversion flags);
+- (d) terms of use permitting storage and derived models.
+
+If no provider fits ₹500 at full volume, Tier B stays sampled.
 
 ### 4.3 Other sources (free)
 - **Weather:** Open-Meteo (historical + forecast, free, no key) at sample points along each corridor. Visibility
@@ -196,10 +232,23 @@ constraint. Every score component is returned to the UI for explainability (NFR-
 
 ## 8. Agent and RAG (detail in doc 05)
 
-### 8.1 Agent
-- **Anthropic Python SDK** with tool use (the SDK tool runner), **Claude Opus 5.5 (`claude-opus-5-5`)** as the
-  default model. The model is configurable through an env var (§9).
-- **Tools (strict JSON schemas):**
+### 8.1 AI chat request paths (cost-optimised for D8)
+
+An open-ended agent loop costs roughly 5–10 times more per query than the budget allows (§9). Most queries therefore
+take a **fixed, short pipeline**, and the agent loop is kept for the rare complex cases.
+
+| Path | When | LLM calls | Quota |
+|---|---|---|---|
+| **A: Form search** | The structured search form | **0** (pure planner) | Free, unlimited |
+| **B: AI plan** (default chat path) | Trip planning, train stats, ETA questions | **2**: (1) *parse*: query + short conversation summary → structured intent JSON, including `query_type`, via structured outputs. (2) *explain*: ranked itineraries JSON → a short explanation (≤ 120 words). The cards are rendered from JSON, not from the LLM | 1 call |
+| **C: Rules Q&A** | `query_type = rules` | Parse + 1 answer call over the top-k retrieved chunks (RAG) | 1 call |
+| **D: Agentic fallback** | Multi-step requests that B and C can't express (e.g. "compare these three options and find a split via a hub you choose") | Tool loop, **capped at 3 tool steps** | 1 call (paid tier only, or a free-tier daily limit of 1) |
+
+**Calls 1 and 2 use the Anthropic Python SDK.** The model for each step is configurable
+(`PATRIBOT_MODEL_PARSE`, `PATRIBOT_MODEL_EXPLAIN`, `PATRIBOT_MODEL_AGENT`), so cost and quality can be tuned per step
+(see §9 and the open question on model choice). Each step also has a configurable effort level.
+
+**Tools for path D (strict JSON schemas):**
 
 | Tool | Purpose |
 |---|---|
@@ -211,13 +260,15 @@ constraint. Every score component is returned to the UI for explainability (NFR-
 | `search_knowledge(query)` | RAG over the rules and notices corpus, returning cited chunks |
 | `live_status(train_no)` | Current position (cached, budget-limited) |
 
-- **Guardrails:**
-  - The system prompt forbids stating any train number, time or rule that didn't come from a tool result.
-  - The response includes structured itinerary cards (JSON) alongside the prose, and the UI renders cards from the JSON, not from the prose.
-  - Missing data → say so (FR-18).
-- **Prompt caching** on the stable system prompt and tool definitions. The agent loop has a capped number of
-  steps.
-- **Streaming** to the web app over SSE.
+**Guardrails (all paths):**
+- The prompts forbid stating any train number, time or rule that isn't in the provided data.
+- A post-check rejects explanations that mention train numbers not in the itinerary JSON.
+- Missing data → say so (FR-18).
+
+**Cost controls:**
+- **Prompt caching** on the stable system prompts and schemas.
+- A **response cache** keyed by normalised intent + date, valid for 6 h. Repeat queries cost nothing and don't count against quota.
+- Streaming to the web app over SSE.
 
 ### 8.2 RAG
 | Step | Choice |
@@ -240,29 +291,41 @@ FR-17).
   - RAG faithfulness via an LLM judge plus spot checks.
 - Runs in CI on demand (it costs money), and is required before any prompt or model change.
 
-## 9. LLM cost (D3), needs your confirmation
+## 9. LLM cost and unit economics (D3, D8)
 
-Current Anthropic list prices (per million tokens, input / output): **Opus 5.5: $4 / $20**, Sonnet 5.5: $2 / $10,
-Haiku 4.5: $1 / $5. Cache reads are much cheaper than fresh input (Opus 5.5: $0.20).
+**Constraints:**
+- Claude spend ≤ **₹500/month** (about $5.9 at ₹85/$).
+- The paid tier earns ₹100 for 50 queries, so a query must cost **well under ₹2** for the paid tier to break even.
 
-**Rough estimate, to be measured:** a typical planning query is 3–5 tool-loop turns, about 40–50k input tokens (half
-of them cached) and about 3k output tokens:
+**Current Anthropic list prices (USD per million tokens):**
 
-| Model | ≈ cost per planning query | 100 queries / month | 500 queries / month |
+| Model | Input | Output | Cache read |
 |---|---|---|---|
-| Opus 5.5 (default) | ~$0.12–0.15 | ~$15 (≈ ₹1,300) | ~$70 (≈ ₹6,000) |
-| Sonnet 5.5 | ~$0.06–0.08 | ~$7 (≈ ₹600) | ~$35 (≈ ₹3,000) |
-| Haiku 4.5 | ~$0.03–0.04 | ~$4 (≈ ₹300) | ~$18 (≈ ₹1,500) |
+| Claude Opus 5.5 | $4 | $20 | $0.20 |
+| Claude Sonnet 5.5 | $2 | $10 | $0.20 |
+| Claude Haiku 4.5 | $1 | $5 | ~$0.10 |
 
-**Controls:**
-- The model is an env var (`PATRIBOT_LLM_MODEL`).
-- Effort level is set per route.
-- Prompt caching.
-- Responses for identical normalised intents are cached.
-- A daily spend cap in the API layer, with per-query cost logged to Postgres.
+**Path B token estimate (to be measured in Phase 4):** about 5.5k input tokens (~3.5k of them cacheable system
+prompts and schemas) and about 1k output tokens (including reasoning).
 
-⚠️ The ₹500/month budget (D1) covers the railway data API. **Claude usage is billed separately.** See open
-question OQ-1.
+| Model for both steps | ≈ ₹ per AI query | Queries for ₹500 | LLM cost of one paid user (50 queries) | Paid-tier margin on ₹100 |
+|---|---|---|---|---|
+| Opus 5.5 | ~₹2.5 | ~200 | ~₹125 | **Negative** |
+| Sonnet 5.5 | ~₹1.2–1.3 | ~400 | ~₹62 | ~₹35 |
+| Haiku 4.5 | ~₹0.7–0.9 | ~600 | ~₹40 | ~₹58 |
+| Haiku 4.5 parse + Sonnet 5.5 explain | ~₹1.0 | ~500 | ~₹50 | ~₹48 |
+
+Margins are before payment-gateway fees (~2%) and any applicable taxes. Path D (agentic) costs about 3–5 times path B,
+so it is capped and limited.
+
+**Spend guard (FR-24):**
+- Every LLM call logs its tokens and ₹ cost to `llm_usage`.
+- The free-tier daily budget is (monthly free budget ÷ days in month). When it is used up, free AI chat pauses until midnight IST, and form search keeps working.
+- Paid usage has its own monthly ceiling.
+- An admin alert fires at 50 / 80 / 100 % of each budget.
+
+**Model choice is open (OQ-5).** The pipeline works with any of the models. The table above shows how each option
+fits the budget.
 
 ## 10. Application layer and infrastructure
 
@@ -270,23 +333,30 @@ question OQ-1.
 |---|---|---|
 | API | FastAPI (uvicorn) in Docker | Cloud Run / ECS / Fly.io |
 | Web | **Next.js (App Router) + TypeScript + Tailwind + shadcn/ui** | Vercel / Cloud Run |
+| Auth | **Auth.js (NextAuth) with Google sign-in** (free). Phone OTP costs per SMS, so it comes later | Same |
+| Payments | POC: coupon or manual activation of the paid plan. Then **Razorpay Subscriptions** + webhook → `subscriptions` table | Same |
+| Ads | AdSense slots behind the `ADS_ENABLED` flag, off during the POC | Same |
 | Orchestration | Dagster (webserver + daemon) | Dagster+ / VM |
 | Warehouse | DuckDB file | MotherDuck / BigQuery |
-| Object storage | Local FS ⇄ R2 | R2 / S3 / GCS |
+| Object storage | Local FS ⇄ private `patribot-data` repo | R2 / S3 / GCS |
 | Serving DB | Postgres + pgvector container | Neon / Supabase / Cloud SQL |
 | ML tracking | MLflow container | Managed MLflow / same VM |
-| Collector | GitHub Actions cron → R2 | Same |
+| Collector | GitHub Actions cron → `patribot-data` | Same |
 | CI | GitHub Actions: ruff, mypy, pytest, dbt build on sample data, web lint and typecheck | Same, plus deploy |
 | Secrets | `.env` (git-ignored) | Platform secret manager |
 
+**App tables (Postgres):** `users`, `subscriptions` (plan, period, status), `usage_ledger` (user, timestamp, path,
+counted call, response-cache hit), `llm_usage` (request id, model, tokens in, cached and out, ₹ cost), `chat_sessions`.
+
 ### 10.1 Web app screens (MVP)
+0. **Sign-in and account:** Google sign-in, plan, quota used and quota remaining, upgrade button.
 1. **Chat planner:**
    - Conversational input.
    - Streamed answer with **itinerary cards**: train, date, departure, scheduled vs. predicted arrival (P50–P90 band), reliability badge, overnight tag, split-journey legs, IRCTC link.
    - A "why this?" expander showing the score breakdown.
 2. **Search form:** the same engine, without the LLM, for power users and cheap queries.
 3. **Train page:** route map, per-stop delay distribution chart, monthly reliability trend.
-4. **Ops dashboard** (admin): pipeline freshness, model metrics (MAE, coverage), LLM cost and latency.
+4. **Ops dashboard** (admin): pipeline freshness, collector calls used vs. budget, model metrics (MAE, coverage), LLM spend vs. budget, and quota usage.
 
 ## 11. Repository layout
 ```
@@ -310,24 +380,24 @@ PatriBot/
 ## 12. Security and compliance
 - API keys live only in env or secrets, never in the repo. Collector secrets go in GitHub Actions secrets.
 - Provenance: every bronze file records its source, endpoint, retrieval timestamp and terms version.
-- No user accounts in the MVP, so no PII. Chat logs are stored with anonymous session IDs and redacted free text.
+- Accounts store minimal PII (name, email). Follow India's DPDP Act 2023: a consent notice, a privacy policy, data deletion on request, and chat logs kept for at most 90 days.
+- Payments go through Razorpay only. We never see or store card or UPI details. Webhook signatures are verified.
 - Rate limiting on public endpoints. A spend cap on LLM calls.
 - No scraping of sites whose terms forbid it.
 
-## 13. Delivery plan (refines BRD §12)
+## 13. Delivery plan (milestone-based, D11)
 
-| Phase | Scope | Target |
+| Phase | Scope | Exit criteria |
 |---|---|---|
-| **0 — Foundations** *(start now)* | API provider spike → pick one. Repo scaffold (uv, Docker Compose, CI). **Collector live on GitHub Actions → R2.** Station clusters and corridor train list | Week 1 |
-| **1 — Data platform** | Dagster + dbt bronze→silver→gold, data-quality checks, reverse ETL to Postgres, weather and calendar | Weeks 2–3 |
-| **2 — Planner + API** | Direct search, overnight filter, split journeys, ranking with baseline ETA (B2) | Weeks 3–4 |
-| **3 — Web app v1** | Next.js search form + results cards against `/plan` | Weeks 4–5 |
-| **4 — Agent + RAG** | Claude tools, rules corpus, chat UI with streaming, eval suite | Weeks 5–6 |
-| **5 — ETA model v1** | LightGBM quantile, nightly batch forecast, backtests, model card | Weeks 6–7 (needs ≥ 4–6 weeks of collected data) |
-| **6 — Hardening** | Monitoring, drift, cost dashboard, README and demo video, benchmark report | Week 8 |
+| **0 — Foundations** ⏰ *urgent* | API provider spike → pick one. Station clusters and corridor paths. Collector on GitHub Actions → `patribot-data`. Repo scaffold (uv, Docker Compose, CI) | Collector has run green for 3 consecutive days |
+| **1 — Data platform** | Dagster + dbt bronze→silver→gold, `dim_train_corridor`, data-quality checks, reverse ETL to Postgres, weather and calendar | Gold tables for all 5 corridors refresh daily, with quality checks passing |
+| **2 — Planner + API** | Direct search, overnight filter, split journeys, ranking with baseline ETA (B2) | Q1–Q3 pass via `/plan` |
+| **3 — Web app v1** | Next.js, Google sign-in, search form, result cards | Form search usable end to end |
+| **4 — AI chat + RAG** | Paths B and C, quotas, spend guard, rules corpus, eval suite. **Measure real token cost per query** | Q1–Q6 pass. Measured cost per query fits the chosen model's budget |
+| **5 — ETA model v1** | LightGBM quantile, nightly batch forecast, backtests, model card | Needs ≥ 4–6 weeks of collected data. Beats B2 on MAE |
+| **6 — Monetisation + hardening** | Coupon or Razorpay subscription, path D (agentic), monitoring, drift, demo, benchmark report | Paid plan can be activated. Public demo |
 
-The planner ships first on **baseline** ETAs (historical averages) and is upgraded to the ML model once enough
-history exists. This keeps the product usable while data builds up.
+Phases 1–4 run on **baseline** ETAs, and phase 5 swaps in the ML model. The product is usable while the history builds up.
 
 ## 14. Architecture decision records (summary)
 
@@ -337,15 +407,19 @@ history exists. This keeps the product usable while data builds up.
 | ADR-2 | DuckDB warehouse + Postgres serving | Postgres-only (weaker for analytics), BigQuery (not local) |
 | ADR-3 | dbt for transformations | Pandas/Polars scripts (no lineage or tests) |
 | ADR-4 | LightGBM quantile regression | Deep sequence models (data-hungry), Prophet (per-series, doesn't pool) |
-| ADR-5 | Claude tool-use agent + deterministic planner | LLM-only planning (hallucination risk), no LLM (loses natural-language UX) |
+| ADR-5 | Claude for parse + explain around a deterministic planner. Agent loop only as a capped fallback | Agent loop for every query (5–10× the cost), LLM-only planning (hallucination risk), no LLM (loses natural-language UX) |
 | ADR-6 | Local bge-m3 embeddings + pgvector hybrid | Hosted embeddings (cost), separate vector DB (extra ops) |
-| ADR-7 | Collector on GitHub Actions + R2 | Laptop cron (gaps), paid VM (cost) |
+| ADR-7 | Collector on GitHub Actions → private data repo | Laptop cron (gaps), R2 (new account), paid VM (cost) |
+| ADR-8 | Corridors defined as paths, with segment-based train membership | Endpoint-to-endpoint train lists (miss split-journey legs and segment signal) |
 
 ## 15. Open questions
 
-| # | Question |
-|---|---|
-| OQ-1 | **Does the ₹500/month include Claude API usage?** If yes, we need the Haiku 4.5 or Sonnet 5.5 tier plus strict caching and a low query volume. If no, Opus 5.5 is the default. See §9 |
-| OQ-2 | Do you have (or can you create) a **GitHub Actions + Cloudflare R2** setup for the collector? Any free always-on alternative works |
-| OQ-3 | Are the corridor picks OK (especially #4, Bengaluru ↔ Hyderabad, vs. Chennai ↔ Bengaluru or Mumbai ↔ Bengaluru)? |
-| OQ-4 | Is the 8-week timeline realistic for your available hours per week? |
+| # | Question | Status |
+|---|---|---|
+| OQ-1 | Does ₹500 include Claude? | ✅ Resolved: a separate ₹500/month for Claude (D8) |
+| OQ-2 | Collector infrastructure | ✅ Resolved: GitHub Actions + private data repo (D9). Confirm you're OK creating the private `patribot-data` repo |
+| OQ-3 | Corridors | ✅ Resolved: 5 corridors, path-based membership (D4, D10) |
+| OQ-4 | Timeline | ✅ Resolved: milestone-based (D11) |
+| OQ-5 | **Which Claude model(s) for parse and explain?** See the §9 table. Opus 5.5 gives a negative paid-tier margin at ₹100 per 50 queries. Sonnet 5.5, Haiku 4.5, or the Haiku + Sonnet mix all fit | Open |
+| OQ-6 | Free-tier AI chat allowance: 3 queries per day per user? | Open |
+| OQ-7 | Railway API provider: decided by the Phase 0 spike. Needs you to sign up and add the key as a GitHub secret | Open |
