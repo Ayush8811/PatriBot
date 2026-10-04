@@ -35,6 +35,10 @@ seeds:
       +column_types: {corridor_id: varchar, station_code: varchar}
     seed_corridor_membership_param:
       +column_types: {param: varchar, value: varchar}
+    calendar_events:  # hand-kept (not generated): holidays, festival rush windows, fog season
+      +column_types:
+        {event_id: varchar, event_name: varchar, kind: varchar, peak_date: date, start_date: date, end_date: date,
+         region: varchar, corridors: varchar, approximate: boolean, notes: varchar}
 
 models:
   patribot:

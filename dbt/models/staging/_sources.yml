@@ -12,3 +12,13 @@ sources:
         description: One row per (source, train_no, start_date) the collector ever attempted.
       - name: stops
         description: Canonical stop rows of each successfully fetched run (IST timestamps).
+      - name: train_schedule
+        description: >
+          Timetable stops (patribot.transform.timetable, from the RailKit timetable cache): one row per train × route
+          stop, "HH:MM" local times, 0-based day offset, cumulative distance, halt, lat/lon. Empty when there is no cache.
+      - name: train_info
+        description: One row per train with a cached schedule (names, types, running days at origin, classes).
+      - name: train_corridor
+        description: >
+          Corridor membership per train × corridor path, computed in Python with patribot.watchlist.membership (the
+          rule the watchlist uses, architecture doc §3.2).

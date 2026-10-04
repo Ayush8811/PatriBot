@@ -91,3 +91,66 @@ models:
               arguments:
                 min_value: 0
                 max_value: 720
+
+  - name: stg_train_schedule
+    description: Silver. One row per train × timetable stop (stopping stations only), local clock times, day offset.
+    columns:
+      - name: train_stop_id
+        data_tests: [unique, not_null]
+      - name: train_no
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_train_info')
+                field: train_no
+      - name: station_code
+        data_tests: [not_null]
+      - name: day_offset
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5
+      - name: distance_km
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+      - name: arr_clock_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1439
+      - name: dep_clock_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1439
+
+  - name: stg_train_info
+    description: Silver. One row per train with a cached timetable.
+    columns:
+      - name: train_no
+        data_tests:
+          - unique
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "regexp_full_match(train_no, '\\d{5}')"
+      - name: n_running_days
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 7
+      - name: running_days
+        description: MON..SUN at the train's origin, comma-separated (RailKit's 7-flag string is Monday-first).
+        data_tests:
+          - expression_is_true:
+              arguments:
+                expression: "regexp_full_match(running_days, '((MON|TUE|WED|THU|FRI|SAT|SUN)(,|$))*')"
