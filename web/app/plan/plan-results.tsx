@@ -19,6 +19,8 @@ import type { PlanResponse } from "@/lib/api/types";
 import { formatDateRange, formatStamp } from "@/lib/format";
 import { FILTERS, SORTS, filterItineraries, sortItineraries, type FilterKey, type SortKey } from "@/lib/itineraries";
 import { useAsync } from "@/lib/use-async";
+import { useSlow } from "@/lib/use-slow";
+import { WakingUpNotice } from "@/components/waking-up";
 
 export function PlanResults() {
   const sp = useSearchParams();
@@ -27,6 +29,7 @@ export function PlanResults() {
   const state = useAsync<PlanResponse>(parsed.ok ? spKey : null, (signal) =>
     parsed.ok ? api.plan(parsed.request, { signal }) : Promise.reject(new Error("invalid")),
   );
+  const slow = useSlow(parsed.ok && state.status === "loading" ? spKey : null);
   const [sort, setSort] = React.useState<SortKey>("best");
   const [filters, setFilters] = React.useState<FilterKey[]>([]);
 
@@ -89,6 +92,7 @@ export function PlanResults() {
     return (
       <>
         {header}
+        {slow && <WakingUpNotice className="mb-4" />}
         <ResultsSkeleton />
       </>
     );

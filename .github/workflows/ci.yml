@@ -65,8 +65,14 @@ jobs:
         env:
           NEXT_PUBLIC_API_MOCK: "1"
       - run: npx playwright install --with-deps chromium
-      - name: Playwright e2e smoke (next build && next start, mock mode)
+      - name: Playwright e2e smoke (next build && next start, mock mode, auth enabled)
         run: npm run test:e2e
+      - name: No server secrets in client bundles
+        # e2e/credentials.ts throwaway values; the e2e build above had them in its env.
+        run: |
+          if grep -rqE "e2e-session-secret-NOT-FOR-PRODUCTION|e2e-api-key-NOT-FOR-PRODUCTION" .next/static; then
+            echo "server-only secret found in .next/static" && exit 1
+          fi
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
