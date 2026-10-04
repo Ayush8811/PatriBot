@@ -17,10 +17,9 @@ from zoneinfo import ZoneInfo
 from patribot.collector.config import load_watchlist
 from patribot.collector.planner import make_plan
 from patribot.collector.store import DataStore
-from patribot.sources.base import FetchStatus, RawResponse, RunningStatusSource
+from patribot.sources.base import STOP_HTTP_STATUSES, FetchStatus, RawResponse, RunningStatusSource
 from patribot.sources.registry import SOURCES, get_source
 
-STOP_HTTP_STATUSES = {401, 403, 429}
 DEFAULT_WATCHLIST = Path(__file__).resolve().parents[3] / "config" / "watchlist.yaml"
 
 

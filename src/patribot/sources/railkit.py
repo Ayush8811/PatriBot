@@ -5,6 +5,9 @@
   -> 200 {"success": true, "data": {"stations": [{arrival/departure scheduled, actual, delay}, ...]}}
   -> 404 when the train has not completed that journey
 
+`RailKitClient` holds the shared HTTP plumbing (key header, throttling, call counting, redaction). The timetable
+endpoints used to build the watchlist live in `railkit_timetable.py`.
+
 Note: RailKit's terms restrict long-term retention of its data. D15 records that the owner accepts this for the POC
 only; RailKit-sourced history must be re-sourced before any commercial use.
 """
@@ -13,7 +16,9 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import httpx
 
@@ -24,7 +29,17 @@ DEFAULT_BASE_URL = "https://api.railkit.in"
 DEFAULT_MIN_INTERVAL_S = 1.1
 
 
-class RailKitSource:
+@dataclass(frozen=True)
+class HttpResult:
+    url: str  # credentials redacted
+    http_status: int | None  # None on a transport failure
+    payload: Any
+    error: str | None = None
+
+
+class RailKitClient:
+    """Shared HTTP plumbing for RailKit endpoints: `x-api-key` header, request spacing and a call counter."""
+
     name = "railkit"
 
     def __init__(
@@ -47,6 +62,7 @@ class RailKitSource:
         self._sleep = sleep
         self._clock = clock
         self._last_call: float | None = None
+        self.calls = 0  # HTTP requests actually sent; each one counts against the RailKit quota
 
     def _throttle(self) -> None:
         if self._last_call is not None:
@@ -55,21 +71,29 @@ class RailKitSource:
                 self._sleep(wait)
         self._last_call = self._clock()
 
-    def fetch_run_status(self, train_no: str, start_date: date) -> RawResponse:
-        url = f"{self._base}/api/v1/trains/{train_no}/history/{start_date:%d-%m-%Y}"
+    def _get(self, path: str, params: dict[str, str] | None = None) -> HttpResult:
+        url = f"{self._base}{path}"
         self._throttle()
+        self.calls += 1
         try:
-            resp = self._client.get(url, headers={"x-api-key": self._key})
+            resp = self._client.get(url, params=params, headers={"x-api-key": self._key})
         except httpx.HTTPError as exc:
-            msg = redact(str(exc), [self._key])
-            return RawResponse(self.name, url, train_no, start_date, FetchStatus.ERROR, None, None, error=msg)
+            return HttpResult(redact(url, [self._key]), None, None, error=redact(str(exc), [self._key]))
         try:
             payload = resp.json()
         except ValueError:
             payload = resp.text[:2000]
-        status = self._classify(resp.status_code, payload)
-        error = None if status is FetchStatus.OK else _error_message(resp.status_code, payload)
-        return RawResponse(self.name, url, train_no, start_date, status, resp.status_code, payload, error=error)
+        return HttpResult(redact(str(resp.request.url), [self._key]), resp.status_code, payload)
+
+
+class RailKitSource(RailKitClient):
+    def fetch_run_status(self, train_no: str, start_date: date) -> RawResponse:
+        r = self._get(f"/api/v1/trains/{train_no}/history/{start_date:%d-%m-%Y}")
+        if r.http_status is None:
+            return RawResponse(self.name, r.url, train_no, start_date, FetchStatus.ERROR, None, None, error=r.error)
+        status = self._classify(r.http_status, r.payload)
+        error = None if status is FetchStatus.OK else error_message(r.http_status, r.payload)
+        return RawResponse(self.name, r.url, train_no, start_date, status, r.http_status, r.payload, error=error)
 
     @staticmethod
     def _classify(http_status: int, payload: object) -> FetchStatus:
@@ -82,7 +106,7 @@ class RailKitSource:
         return FetchStatus.OK
 
 
-def _error_message(http_status: int, payload: object) -> str:
+def error_message(http_status: int, payload: object) -> str:
     if not isinstance(payload, dict):
         return f"HTTP {http_status}: {str(payload)[:200]}".strip()
     detail = payload.get("message") or payload.get("error") or ""

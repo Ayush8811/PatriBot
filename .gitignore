@@ -9,3 +9,7 @@ data/
 samples/
 # agent worktrees (local only)
 .claude/worktrees/
+# RailKit-derived watchlist output and response cache: belong in the private data repo only (D15)
+/watchlist.yaml
+/watchlist-report.json
+.watchlist-cache/
