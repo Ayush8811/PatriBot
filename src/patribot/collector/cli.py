@@ -43,7 +43,8 @@ def _summary(plan, extra: dict | None = None) -> dict:
         "selected": len(plan.selected),
         "sampled_out": plan.sampled_out,
         "over_budget": plan.over_budget,
-        "tier_b_stride": plan.tier_b_stride,
+        "tier_b_rate": plan.tier_b_rate,
+        "tier_c_rate": plan.tier_c_rate,
         "remaining_budget_today": plan.remaining_budget,
     }
     return out | (extra or {})

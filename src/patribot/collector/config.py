@@ -17,14 +17,15 @@ class CollectorSettings(BaseModel):
     lookback_days: int = Field(3, ge=0, le=30)
     grace_hours: float = Field(6, ge=0)
     max_attempts: int = Field(3, ge=1)
-    max_tier_b_stride: int = Field(4, ge=1)
+    max_tier_b_stride: int = Field(4, ge=1)  # tier-B sampling never drops below 1 / max_tier_b_stride
+    min_tier_c_rate: float = Field(0.05, ge=0, le=1)  # tier C keeps at least this share of runs (segment signal)
 
 
 class WatchedTrain(BaseModel):
     train_no: str = Field(pattern=r"^\d{5}$")
     name: str = ""
     corridors: list[str] = []
-    tier: Literal["A", "B"] = "B"
+    tier: Literal["A", "B", "C"] = "B"
     dep_time: time  # departure from origin, local (IST)
     journey_minutes: int = Field(gt=0)
     run_days: list[Weekday] = list(WEEKDAYS)

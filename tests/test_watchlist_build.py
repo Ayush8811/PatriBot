@@ -144,10 +144,10 @@ def test_build_generates_collector_watchlist(setup, capsys):
     assert d["excluded"] == {"MEMU (6xxxx)": 1, "type MEMU": 1, "unreserved classes only": 1}
     assert d["outcomes"] == {"not a member": 1}
     assert d["api_calls"] == len(fake.requests) and d["candidates"] == 5
-    assert report["complete"] and report["trains"] == 3 and report["by_tier"] == {"A": 2, "B": 1}
-    assert report["by_corridor"]["KOL-DEL"] == {"total": 3, "A": 2, "B": 1, "by_path": {"main": 3}}
+    assert report["complete"] and report["trains"] == 3 and report["by_tier"] == {"A": 2, "B": 1, "C": 0}
+    assert report["by_corridor"]["KOL-DEL"] == {"total": 3, "A": 2, "B": 1, "C": 0, "by_path": {"main": 3}}
     assert report["by_corridor"]["DEL-PAT"]["total"] == 1 and report["multi_corridor_trains"] == 1
-    assert report["estimated_collection_calls_per_month"] == {"A": 60, "B": 13, "total": 73}  # (7+7+3) x 30/7
+    assert report["estimated_collection_calls_per_month"] == {"A": 60, "B": 13, "C": 0, "total": 73}  # (7+7+3) x 30/7
     assert json.loads(capsys.readouterr().out)["trains"] == 3
     assert "GENERATED" in out.read_text() and KEY not in out.read_text()
 

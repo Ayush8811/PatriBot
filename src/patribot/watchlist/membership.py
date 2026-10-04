@@ -156,3 +156,10 @@ def serves_both_ends(stops: Iterable[RouteStop], cfg: CorridorConfig, corridor_i
     c = next(c for c in cfg.corridors if c.id == corridor_id)
     halts = {s.code for s in stops if s.halts}
     return bool(halts & set(cfg.clusters[c.a])) and bool(halts & set(cfg.clusters[c.b]))
+
+
+def serves_end_or_hub(stops: Iterable[RouteStop], cfg: CorridorConfig, corridor_id: str) -> bool:
+    """Halts at a station of either end cluster or at a split hub: useful as a direct or split-journey leg."""
+    c = next(c for c in cfg.corridors if c.id == corridor_id)
+    halts = {s.code for s in stops if s.halts}
+    return bool(halts & (set(cfg.clusters[c.a]) | set(cfg.clusters[c.b]) | set(c.split_hubs)))

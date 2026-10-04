@@ -13,6 +13,7 @@ from patribot.watchlist.membership import (
     memberships,
     path_slots,
     serves_both_ends,
+    serves_end_or_hub,
 )
 
 CFG = CorridorConfig.model_validate(
@@ -155,3 +156,13 @@ def test_real_corridor_config_loads_and_maps_clusters():
     assert western.slots["BDTS"] == 0
     assert isinstance(cfg.membership, MembershipRule) and cfg.membership.min_km == 150
     assert {"HWH", "SDAH", "NDLS", "DLI", "BZA"} <= set(cfg.all_stations())
+
+
+def test_serves_end_or_hub_separates_tier_b_from_c():
+    cfg = CorridorConfig.model_validate(
+        CFG.model_dump() | {"corridors": [c.model_dump() | {"split_hubs": ["GAYA"]} for c in CFG.corridors]}
+    )
+    assert serves_end_or_hub(route("DHN", "GAYA", "NDLS"), cfg, "KOL-DEL")  # end cluster (NDLS)
+    assert serves_end_or_hub(route("ASN", "DHN", "GAYA"), cfg, "KOL-DEL")  # split hub (GAYA)
+    assert not serves_end_or_hub(route("BWN", "ASN", "DHN"), cfg, "KOL-DEL")  # neither -> tier C
+    assert not serves_end_or_hub(route("BWN", "ASN", "GAYA", passes=("GAYA",)), cfg, "KOL-DEL")  # passes the hub
