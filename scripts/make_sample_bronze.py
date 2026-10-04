@@ -11,6 +11,10 @@ up, and delays are drawn from a seeded random walk that accumulates along the ro
 on northern corridors). The default window crosses New Year, to exercise the parser's year inference. A few runs are
 deliberately awkward: cancelled (404 every attempt), retried (404 then ok, 429 then ok), incomplete (no actuals near
 the destination), a cancelled-flag payload, "*" on actual times, and junk station rows.
+
+It also writes a synthetic timetable cache, `<out>/state/timetable-cache/*.json.gz`, in the shape of the watchlist
+build's RailKit cache: the same schedules as the running-status sample, plus two timetable-only trains (no history,
+one running Mon/Wed/Fri only), and a station timetable with classes for every station they halt at.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import argparse
 import gzip
 import json
 import random
+import re
 import zlib
 from collections import defaultdict
 from dataclasses import dataclass
@@ -29,7 +34,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-from patribot.collector.config import WatchedTrain, load_watchlist
+from patribot.collector.config import WEEKDAYS, WatchedTrain, load_watchlist
 
 IST = ZoneInfo("Asia/Kolkata")
 REPO = Path(__file__).resolve().parents[1]
@@ -281,7 +286,159 @@ def generate(out: Path, start: date, days: int, seed: int = 7, watchlist: Path |
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
     counts["files"] = len(batches)
     counts["trains"] = len(trains)
+    counts.update(generate_timetable(out, start, wl.trains, corridors))
     return dict(counts)
+
+
+# ---- synthetic timetable cache (the shape of the watchlist build's RailKit cache, docs/phase1/watchlist.md) ------
+
+# Timetable-only trains: no running history, so the planner falls back to coarser delay estimates for them.
+# (train_no, name, type, station-timetable type, origin, destination, departure, journey minutes, run days, classes)
+EXTRA_TRAINS: list[tuple[str, str, str, str, str, str, str, int, list[str], str]] = [
+    (
+        "22999",
+        "Sample Kanpur Delhi SF",
+        "SUPERFAST",
+        "Superfast",
+        "CNB",
+        "NDLS",
+        "06:30",
+        330,
+        list(WEEKDAYS),
+        "2A,3A,SL",
+    ),
+    (
+        "22998",
+        "Sample Howrah Gaya Exp",
+        "MAIL_EXPRESS",
+        "Mail Express",
+        "HWH",
+        "GAYA",
+        "21:40",
+        500,
+        ["MON", "WED", "FRI"],
+        "2A,3A,SL,GEN",
+    ),
+    (  # pairs with 22998 at GAYA: a genuine split (neither train runs Kolkata -> Delhi itself)
+        "22997",
+        "Sample Gaya Delhi SF",
+        "SUPERFAST",
+        "Superfast",
+        "GAYA",
+        "NDLS",
+        "13:00",  # after 22998's predicted P90 arrival at GAYA (~06:00 + fallback delay) + 45 min buffer
+        720,
+        list(WEEKDAYS),
+        "2A,3A,SL",
+    ),
+]
+DETAIL_TYPES = {"RAJDHANI": "Rajdhani", "DURONTO": "Duronto Express", "SHATABDI": "Shatabdi", "VANDE": "Vande Bharat"}
+
+
+def _coords(code: str) -> dict[str, float]:
+    """Made-up but stable coordinates inside India (synthetic data must not carry provider data, D15)."""
+    return {"latitude": 12 + (_h(code, "lat") % 1600) / 100, "longitude": 74 + (_h(code, "lon") % 1400) / 100}
+
+
+def _station_name(code: str) -> str:
+    return STATION_NAMES.get(code, f"{code} JN").title()
+
+
+def _info_payload(no: str, name: str, ttype: str, run_days: list[str], stops: list[Stop], ref: date) -> dict:
+    route = []
+    for s in stops:
+        t = s.sched_arr or s.sched_dep
+        halt = round((s.sched_dep - s.sched_arr) / timedelta(minutes=1)) if s.sched_arr and s.sched_dep else 0
+        route.append(
+            {
+                "stnCode": s.code,
+                "stnName": _station_name(s.code),
+                "arrival": s.sched_arr.strftime("%H:%M") if s.sched_arr else "--",
+                "departure": s.sched_dep.strftime("%H:%M") if s.sched_dep else "--",
+                "halt": f"{halt} min",
+                "haltMinutes": halt,
+                "distance": str(int(s.km)),
+                "day": str((t.date() - ref).days + 1),
+                "platform": 1 + _h(no, s.code) % 8,
+                "coordinates": _coords(s.code),
+            }
+        )
+    minutes = round((stops[-1].sched_arr - stops[0].sched_dep) / timedelta(minutes=1))
+    info = {
+        "train_no": no,
+        "train_name": name.upper()[:15],
+        "from_stn_name": _station_name(stops[0].code),
+        "from_stn_code": stops[0].code,
+        "to_stn_name": _station_name(stops[-1].code),
+        "to_stn_code": stops[-1].code,
+        "from_time": stops[0].sched_dep.strftime("%H:%M"),
+        "to_time": stops[-1].sched_arr.strftime("%H:%M"),
+        "travel_time": f"{minutes // 60:02d}:{minutes % 60:02d} hrs",
+        "running_days": "".join("1" if d in run_days else "0" for d in WEEKDAYS),  # Monday first (confirmed)
+        "type": ttype,
+        "train_id": str(_h(no) % 9000),
+    }
+    return {"trainInfo": info, "route": route}
+
+
+def _cache_write(cache: Path, api_path: str, data: Any, fetched_at: float) -> None:
+    f = cache / (re.sub(r"[^A-Za-z0-9]+", "_", api_path.strip("/")) + ".json.gz")
+    body = json.dumps({"fetched_at": fetched_at, "path": api_path, "data": data}, ensure_ascii=False)
+    f.write_bytes(gzip.compress(body.encode("utf-8"), mtime=0))
+
+
+def _between(corridors: dict[str, dict[str, Any]], origin: str, dest: str) -> list[str]:
+    """Waypoints from `origin` to `dest` along the first corridor path that has both, in that order."""
+    for c in corridors.values():
+        for path in c["paths"].values():
+            for codes in (path, path[::-1]):
+                if origin in codes and dest in codes and codes.index(origin) < codes.index(dest):
+                    return codes[codes.index(origin) : codes.index(dest) + 1]
+    raise ValueError(f"no corridor path from {origin} to {dest}")
+
+
+def generate_timetable(
+    out: Path, ref: date, trains: list[WatchedTrain], corridors: dict[str, dict[str, Any]]
+) -> dict[str, int]:
+    """Write `<out>/state/timetable-cache/`: train info for every sample train (the same timetable the running-status
+    sample uses) plus EXTRA_TRAINS, and a station timetable (classes, finer type) for every station they halt at."""
+    cache = Path(out) / "state" / "timetable-cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    fetched_at = datetime.combine(ref, datetime.min.time(), tzinfo=UTC).timestamp()
+    entries = []
+    for train in trains:
+        _, codes = route_for(train, corridors)
+        detail = next((v for k, v in DETAIL_TYPES.items() if k in train.name.upper()), None)
+        ttype = detail.split()[0].upper() if detail else "SUPERFAST"
+        classes = "1A,2A,3A" if detail in ("Rajdhani", "Duronto Express") else "1A,2A,3A,SL,GEN"
+        stops = timetable(train, codes, ref)
+        entries.append((train.train_no, train.name, ttype, detail or "Superfast", list(train.run_days), classes, stops))
+    for no, name, ttype, detail, origin, dest, dep, minutes, days, classes in EXTRA_TRAINS:
+        wt = WatchedTrain(train_no=no, name=name, dep_time=dep, journey_minutes=minutes, run_days=days)
+        stops = timetable(wt, _between(corridors, origin, dest), ref)
+        entries.append((no, name, ttype, detail, days, classes, stops))
+
+    at_station: dict[str, list[dict]] = defaultdict(list)
+    for no, name, ttype, detail, days, classes, stops in entries:
+        _cache_write(cache, f"/api/v1/trains/{no}/info", _info_payload(no, name, ttype, days, stops, ref), fetched_at)
+        for s in stops:
+            at_station[s.code].append(
+                {
+                    "trainNo": no,
+                    "trainName": name.upper()[:15],
+                    "source": stops[0].code,
+                    "destination": stops[-1].code,
+                    "trainType": detail,
+                    "classes": classes,
+                    "runningDays": ",".join(d.title() for d in days),
+                    "arrival": s.sched_arr.strftime("%H:%M") if s.sched_arr else "--",
+                    "departure": s.sched_dep.strftime("%H:%M") if s.sched_dep else "--",
+                }
+            )
+    for code, rows in sorted(at_station.items()):
+        data = {"summary": f"{len(rows)} Trains", "station": code, "totalTrains": len(rows), "trains": rows}
+        _cache_write(cache, f"/api/v1/stations/{code}/timetable", data, fetched_at)
+    return {"timetable_trains": len(entries), "timetable_stations": len(at_station)}
 
 
 def main(argv: list[str] | None = None) -> int:

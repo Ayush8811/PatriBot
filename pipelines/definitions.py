@@ -2,11 +2,14 @@
 
     bronze/running_status  inventory of the collector's raw files (in a checkout of the private patribot-data repo)
       → silver_input/runs, silver_input/stops   provider parsers → Parquet (patribot.transform.bronze)
+    bronze/timetable_cache  cached RailKit timetable responses (state/timetable-cache in the data repo)
+      → silver_input/train_schedule, train_info, train_corridor   (patribot.transform.timetable)
       → dbt: ref seeds, silver stg_*, gold dim_* / fct_* / agg_*   (dagster-dbt; dbt tests become asset checks)
       → serving/postgres   reverse ETL of gold tables into Postgres schema `serving` (PATRIBOT_PG_DSN)
 
 Run locally:  uv run dagster dev        (reads [tool.dagster] in pyproject.toml)
 Environment:  PATRIBOT_DATA_DIR (default ./data), PATRIBOT_WAREHOUSE_DIR (default ./warehouse), PATRIBOT_PG_DSN,
+              PATRIBOT_TIMETABLE_DIR (default <data dir>/state/timetable-cache),
               PATRIBOT_FRESHNESS_HOURS (default 36)
 """
 
@@ -35,12 +38,14 @@ from dagster_dbt import DbtCliResource, DbtProject, dbt_assets, get_asset_key_fo
 
 from patribot.transform.bronze import bronze_files, build_silver_input, silver_input_dir
 from patribot.transform.serving import SERVING_TABLES, psycopg_connect, sync_to_postgres
+from patribot.transform.timetable import build_timetable_input, timetable_dir, timetable_files
 
 REPO = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.environ.get("PATRIBOT_DATA_DIR") or REPO / "data").resolve()
 WAREHOUSE_DIR = Path(os.environ.get("PATRIBOT_WAREHOUSE_DIR") or REPO / "warehouse").resolve()
 DUCKDB_PATH = WAREHOUSE_DIR / "patribot.duckdb"
 FRESHNESS_HOURS = float(os.environ.get("PATRIBOT_FRESHNESS_HOURS", "36"))
+TIMETABLE_DIR = timetable_dir(DATA_DIR).resolve()
 
 # dbt reads the warehouse location from the environment (dbt/profiles.yml, dbt/models/staging/_sources.yml);
 # make it absolute so it does not depend on the directory dbt runs from.
@@ -49,6 +54,10 @@ os.environ["PATRIBOT_WAREHOUSE_DIR"] = str(WAREHOUSE_DIR)
 BRONZE_KEY = AssetKey(["bronze", "running_status"])
 RUNS_KEY = AssetKey(["silver_input", "runs"])  # = dagster-dbt's key for dbt source silver_input.runs
 STOPS_KEY = AssetKey(["silver_input", "stops"])
+TIMETABLE_KEY = AssetKey(["bronze", "timetable_cache"])
+TT_SCHEDULE_KEY = AssetKey(["silver_input", "train_schedule"])  # = dagster-dbt's keys for the dbt sources
+TT_INFO_KEY = AssetKey(["silver_input", "train_info"])
+TT_CORRIDOR_KEY = AssetKey(["silver_input", "train_corridor"])
 
 # Dagster keeps its own dbt target dir. A `dbt build --project-dir dbt` run by hand from the repo root leaves a
 # partial-parse cache with *relative* seed paths in dbt/target; dagster-dbt would copy that cache into each run (it
@@ -111,6 +120,38 @@ def silver_input(context: AssetExecutionContext):
     )
 
 
+@asset(
+    key=TIMETABLE_KEY,
+    group_name="bronze",
+    description="Cached RailKit timetable responses (train info, station timetables) from the watchlist build.",
+)
+def bronze_timetable_cache(context: AssetExecutionContext) -> MaterializeResult:
+    files = timetable_files(TIMETABLE_DIR)
+    if not files:
+        context.log.warning(f"no timetable cache under {TIMETABLE_DIR} (set PATRIBOT_TIMETABLE_DIR)")
+    return MaterializeResult(metadata={"timetable_dir": str(TIMETABLE_DIR), "files": len(files)})
+
+
+@multi_asset(
+    specs=[
+        AssetSpec(TT_SCHEDULE_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="Train × timetable stop."),
+        AssetSpec(TT_INFO_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="One row per timetabled train."),
+        AssetSpec(TT_CORRIDOR_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="Corridor membership (D10)."),
+    ],
+)
+def silver_timetable(context: AssetExecutionContext):
+    stats = build_timetable_input(TIMETABLE_DIR, WAREHOUSE_DIR)
+    common = {"cache_files": stats.files, "bad_files": stats.bad_files}
+    yield MaterializeResult(asset_key=TT_SCHEDULE_KEY, metadata={**common, "rows": stats.stops})
+    yield MaterializeResult(
+        asset_key=TT_INFO_KEY, metadata={**common, "rows": stats.trains, "reserved": stats.reserved_trains}
+    )
+    yield MaterializeResult(
+        asset_key=TT_CORRIDOR_KEY,
+        metadata={**common, "rows": stats.memberships, "member_trains": stats.member_trains},
+    )
+
+
 @asset_check(asset=RUNS_KEY, description=f"Newest fetched run is at most {FRESHNESS_HOURS:g} h old.")
 def silver_input_runs_fresh() -> AssetCheckResult:
     path = silver_input_dir(WAREHOUSE_DIR) / "runs.parquet"
@@ -163,7 +204,14 @@ def serving_postgres(context: AssetExecutionContext) -> MaterializeResult:
 daily_refresh = define_asset_job("daily_refresh", selection=AssetSelection.all())
 
 defs = Definitions(
-    assets=[bronze_running_status, silver_input, patribot_dbt_assets, serving_postgres],
+    assets=[
+        bronze_running_status,
+        silver_input,
+        bronze_timetable_cache,
+        silver_timetable,
+        patribot_dbt_assets,
+        serving_postgres,
+    ],
     asset_checks=[silver_input_runs_fresh],
     jobs=[daily_refresh],
     # after the collector's 00:17 UTC (05:47 IST) run; update the patribot-data checkout before this fires

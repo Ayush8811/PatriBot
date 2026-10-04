@@ -1,12 +1,26 @@
-"""A fake RailKit API that serves the documented response shapes (RAJIV81205/RailKit endpointDocs.ts)."""
+"""Shared fixtures: a fake RailKit API that serves the documented response shapes (RAJIV81205/RailKit
+endpointDocs.ts), and a warehouse built end to end from the synthetic sample (bronze + timetable → dbt build)."""
 
 from __future__ import annotations
 
+import importlib.util
+import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass, field
+from datetime import date
+from pathlib import Path
+from types import ModuleType
 
 import httpx
 import pytest
+
+REPO = Path(__file__).resolve().parents[1]
+# The synthetic sample's window crosses New Year (parser year inference, planner date maths). Tests that plan
+# against the sample use dates inside it.
+SAMPLE_START = date(2026, 12, 20)
+SAMPLE_DAYS = 14
 
 KEY = "rk_secret"
 
@@ -132,3 +146,40 @@ class FakeRailKit:
 @pytest.fixture
 def fake_railkit() -> FakeRailKit:
     return FakeRailKit()
+
+
+def load_sample_script() -> ModuleType:
+    """scripts/make_sample_bronze.py as a module."""
+    spec = importlib.util.spec_from_file_location("make_sample_bronze", REPO / "scripts" / "make_sample_bronze.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # dataclasses look their module up while the script executes
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.fixture(scope="session")
+def sample_script() -> ModuleType:
+    return load_sample_script()
+
+
+@pytest.fixture(scope="session")
+def built_warehouse(tmp_path_factory, sample_script):
+    """Synthetic bronze + timetable cache → silver input → `dbt build` (models and data tests), once per session.
+    Returns (duckdb path, generator counts, bronze stats)."""
+    from patribot.transform.bronze import build_silver_input
+    from patribot.transform.timetable import build_timetable_input
+
+    root = tmp_path_factory.mktemp("e2e")
+    data, wh = root / "bronze", root / "warehouse"
+    counts = sample_script.generate(data, SAMPLE_START, days=SAMPLE_DAYS)
+    stats = build_silver_input(data, wh)
+    build_timetable_input(data / "state" / "timetable-cache", wh)
+
+    # a separate process, so dbt-duckdb's cached connection does not clash with the tests' own connections
+    args = [sys.executable, "-m", "dbt.cli.main", "build", "--project-dir", str(REPO / "dbt")]
+    args += ["--profiles-dir", str(REPO / "dbt"), "--target-path", str(root / "dbt-target")]
+    args += ["--log-path", str(root / "dbt-logs")]
+    env = {**os.environ, "PATRIBOT_WAREHOUSE_DIR": str(wh)}
+    out = subprocess.run(args, env=env, capture_output=True, text=True, timeout=600)
+    assert out.returncode == 0, f"dbt build failed:\n{out.stdout[-5000:]}\n{out.stderr[-2000:]}"
+    return wh / "patribot.duckdb", counts, stats

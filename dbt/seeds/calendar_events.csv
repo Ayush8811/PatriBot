@@ -1,0 +1,25 @@
+event_id,event_name,kind,peak_date,start_date,end_date,region,corridors,approximate,notes
+christmas_new_year_2025,Christmas and New Year,festival_window,2025-12-25,2025-12-20,2026-01-03,ALL,,false,holiday travel rush window (fixed dates)
+fog_2025_26,Fog season (North India),fog_season,,2025-12-15,2026-02-15,NORTH,KOL-DEL|DEL-PAT|MUM-DEL,true,dense-fog delay season; window is a convention
+republic_day_2026,Republic Day,national_holiday,2026-01-26,2026-01-26,2026-01-26,ALL,,false,
+holi_2026,Holi,festival_window,2026-03-04,2026-02-27,2026-03-08,NORTH|EAST,KOL-DEL|DEL-PAT|MUM-DEL,true,lunar date; window covers the home-travel rush
+eid_ul_fitr_2026,Eid ul-Fitr,festival_window,2026-03-20,2026-03-17,2026-03-23,ALL,,true,depends on moon sighting
+eid_ul_adha_2026,Eid ul-Adha (Bakrid),festival_window,2026-05-27,2026-05-24,2026-05-30,ALL,,true,depends on moon sighting
+independence_day_2026,Independence Day,national_holiday,2026-08-15,2026-08-15,2026-08-15,ALL,,false,
+gandhi_jayanti_2026,Gandhi Jayanti,national_holiday,2026-10-02,2026-10-02,2026-10-02,ALL,,false,
+durga_puja_2026,Durga Puja and Dussehra,festival_window,2026-10-20,2026-10-14,2026-10-24,EAST|ALL,KOL-DEL|KOL-MAS|DEL-PAT,true,lunar date; peak = Vijaya Dashami
+diwali_2026,Diwali,festival_window,2026-11-08,2026-11-01,2026-11-11,ALL,,true,lunar date; window covers the rush before and Bhai Dooj after
+chhath_2026,Chhath Puja,festival_window,2026-11-15,2026-11-10,2026-11-19,EAST|NORTH,KOL-DEL|DEL-PAT,true,lunar date; heaviest Delhi→Bihar rush of the year
+christmas_new_year_2026,Christmas and New Year,festival_window,2026-12-25,2026-12-20,2027-01-03,ALL,,false,holiday travel rush window (fixed dates)
+fog_2026_27,Fog season (North India),fog_season,,2026-12-15,2027-02-15,NORTH,KOL-DEL|DEL-PAT|MUM-DEL,true,dense-fog delay season; window is a convention
+republic_day_2027,Republic Day,national_holiday,2027-01-26,2027-01-26,2027-01-26,ALL,,false,
+eid_ul_fitr_2027,Eid ul-Fitr,festival_window,2027-03-10,2027-03-07,2027-03-13,ALL,,true,depends on moon sighting
+holi_2027,Holi,festival_window,2027-03-22,2027-03-17,2027-03-26,NORTH|EAST,KOL-DEL|DEL-PAT|MUM-DEL,true,lunar date; window covers the home-travel rush
+eid_ul_adha_2027,Eid ul-Adha (Bakrid),festival_window,2027-05-17,2027-05-14,2027-05-20,ALL,,true,depends on moon sighting
+independence_day_2027,Independence Day,national_holiday,2027-08-15,2027-08-15,2027-08-15,ALL,,false,
+gandhi_jayanti_2027,Gandhi Jayanti,national_holiday,2027-10-02,2027-10-02,2027-10-02,ALL,,false,
+durga_puja_2027,Durga Puja and Dussehra,festival_window,2027-10-09,2027-10-03,2027-10-12,EAST|ALL,KOL-DEL|KOL-MAS|DEL-PAT,true,lunar date; peak = Vijaya Dashami
+diwali_2027,Diwali,festival_window,2027-10-29,2027-10-22,2027-11-01,ALL,,true,lunar date; window covers the rush before and Bhai Dooj after
+chhath_2027,Chhath Puja,festival_window,2027-11-04,2027-10-31,2027-11-08,EAST|NORTH,KOL-DEL|DEL-PAT,true,lunar date; heaviest Delhi→Bihar rush of the year
+christmas_new_year_2027,Christmas and New Year,festival_window,2027-12-25,2027-12-20,2028-01-03,ALL,,false,holiday travel rush window (fixed dates)
+fog_2027_28,Fog season (North India),fog_season,,2027-12-15,2028-02-15,NORTH,KOL-DEL|DEL-PAT|MUM-DEL,true,dense-fog delay season; window is a convention

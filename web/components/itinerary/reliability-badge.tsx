@@ -1,7 +1,12 @@
 import { CircleAlert, CircleCheck, CircleDashed, CircleX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { formatPercent, historyLabel, reliabilityLabel, reliabilityLevel } from "@/lib/format";
+import {
+  formatPercent,
+  historyLabel,
+  reliabilityLabel,
+  reliabilityLevel,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const VARIANT = { high: "good", medium: "warn", low: "bad" } as const;
@@ -16,26 +21,45 @@ export function ReliabilityBadge({
   historyRuns,
   className,
   showRuns = true,
+  observed = false,
 }: {
   reliability: number;
   historyRuns: number;
   className?: string;
   showRuns?: boolean;
+  /** true: an observed share of collected runs (train page); false: the planner's predicted probability (cards). */
+  observed?: boolean;
 }) {
   const estimate = historyRuns <= 0;
   const level = reliabilityLevel(reliability);
   const Icon = estimate ? CircleDashed : ICON[level];
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-x-2 gap-y-1", className)}>
+    <span
+      className={cn(
+        "inline-flex flex-wrap items-center gap-x-2 gap-y-1",
+        className,
+      )}
+    >
       <Badge
         variant={estimate ? "muted" : VARIANT[level]}
         data-level={estimate ? "estimate" : level}
-        title="Chance of arriving within 30 minutes of the timetable"
+        title={
+          observed
+            ? "Share of collected runs that arrived within 30 minutes of the timetable"
+            : "Predicted chance of arriving within 30 minutes of the timetable"
+        }
       >
         <Icon aria-hidden />
-        {estimate ? "Estimate" : reliabilityLabel(reliability)} · {formatPercent(reliability)} within 30 min
+        {estimate ? "Estimate" : reliabilityLabel(reliability)} ·{" "}
+        {observed
+          ? `${formatPercent(reliability)} of runs within 30 min`
+          : `~${formatPercent(reliability)} chance within 30 min`}
       </Badge>
-      {showRuns && <span className="text-muted-foreground text-xs">{historyLabel(historyRuns)}</span>}
+      {showRuns && (
+        <span className="text-muted-foreground text-xs">
+          {historyLabel(historyRuns)}
+        </span>
+      )}
     </span>
   );
 }

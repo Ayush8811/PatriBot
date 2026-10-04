@@ -8,7 +8,8 @@ It may start or end anywhere: on the path, or beyond it. A station the train pas
 count. The rule assumes that a train halting at two path stations runs along the path between them. A train is a
 member of a corridor when it is a member of any of its paths.
 
-The same rule must be used by dbt `dim_train_corridor` when timetable data reaches the warehouse.
+The warehouse uses these same functions (`patribot.transform.timetable` → dbt `dim_train_corridor`), so the watchlist
+and the planner can never disagree on membership.
 """
 
 from __future__ import annotations
