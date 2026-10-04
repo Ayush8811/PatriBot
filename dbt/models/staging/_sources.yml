@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: silver_input
+    description: >
+      Parquet written by `patribot.transform.bronze` from the collector's bronze files (one chosen envelope per
+      run key, parsed by the provider parser). Rebuilt in full on every run.
+    meta:
+      external_location: "read_parquet('{{ env_var('PATRIBOT_WAREHOUSE_DIR', 'warehouse') }}/silver_input/{name}.parquet')"
+    tables:
+      - name: runs
+        description: One row per (source, train_no, start_date) the collector ever attempted.
+      - name: stops
+        description: Canonical stop rows of each successfully fetched run (IST timestamps).

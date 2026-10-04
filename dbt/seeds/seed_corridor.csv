@@ -1,0 +1,6 @@
+corridor_id,corridor_name,cluster_a,cluster_b,is_primary,verified
+KOL-DEL,Kolkata ↔ Delhi,KOLKATA,DELHI,true,false
+DEL-PAT,Delhi ↔ Patna,DELHI,PATNA,false,false
+MUM-DEL,Mumbai ↔ Delhi,MUMBAI,DELHI,false,false
+BLR-HYD,Bengaluru ↔ Hyderabad,BENGALURU,HYDERABAD,false,false
+KOL-MAS,Kolkata ↔ Chennai,KOLKATA,CHENNAI,false,false

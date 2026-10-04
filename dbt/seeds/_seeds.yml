@@ -1,0 +1,50 @@
+version: 2
+
+# Generated from config/corridors.yaml by `uv run python -m patribot.transform.seeds`. Do not edit by hand:
+# tests/test_transform_seeds.py fails when they drift from the config.
+seeds:
+  - name: seed_station_cluster
+    columns:
+      - name: station_code
+        data_tests: [unique, not_null]
+      - name: cluster_id
+        data_tests: [not_null]
+  - name: seed_corridor
+    columns:
+      - name: corridor_id
+        data_tests: [unique, not_null]
+      - name: cluster_a
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('seed_station_cluster')
+                field: cluster_id
+      - name: cluster_b
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('seed_station_cluster')
+                field: cluster_id
+  - name: seed_corridor_waypoint
+    columns:
+      - name: corridor_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('seed_corridor')
+                field: corridor_id
+      - name: station_code
+        data_tests: [not_null]
+  - name: seed_corridor_split_hub
+    columns:
+      - name: corridor_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('seed_corridor')
+                field: corridor_id
+  - name: seed_corridor_membership_param
+    columns:
+      - name: param
+        data_tests: [unique, not_null]

@@ -1,0 +1,146 @@
+version: 2
+
+models:
+  - name: dim_station_cluster
+    description: Gold. Station → city cluster mapping from config/corridors.yaml. A station belongs to at most one cluster.
+    columns:
+      - name: station_code
+        data_tests: [unique, not_null]
+      - name: cluster_id
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [KOLKATA, DELHI, PATNA, MUMBAI, BENGALURU, HYDERABAD, CHENNAI]
+
+  - name: dim_station
+    description: Gold. Stations seen in running data or named in the corridor config.
+    columns:
+      - name: station_code
+        data_tests: [unique, not_null]
+      - name: cluster_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station_cluster')
+                field: cluster_id
+
+  - name: dim_train
+    description: Gold. Trains seen by the collector (running-data view).
+    columns:
+      - name: train_no
+        data_tests: [unique, not_null]
+      - name: n_runs_attempted
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 1
+
+  - name: fct_run_summary
+    description: >
+      Gold. One row per attempted run: origin departure delay, final arrival delay, journey minutes actual vs
+      scheduled, run_state and whether the run may feed delay targets.
+    columns:
+      - name: run_id
+        data_tests: [unique, not_null]
+      - name: train_no
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_train')
+                field: train_no
+      - name: run_state
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [complete, incomplete, cancelled, diverted, not_found, fetch_error, unparseable]
+      - name: sched_journey_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 7200
+      - name: act_journey_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 10080
+      - name: final_arr_delay_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -180
+                max_value: 4320
+      - name: is_delay_target_eligible
+        data_tests:
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "run_state = 'complete'"
+              config:
+                where: "is_delay_target_eligible"
+
+  - name: fct_run_stop_delay
+    description: >
+      Gold. One row per run × stop with delays and segment delay gain. Rows of non-complete or disrupted runs are
+      kept but flagged; only is_delay_target rows feed statistics and model targets.
+    columns:
+      - name: run_stop_id
+        data_tests: [unique, not_null]
+      - name: run_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_run_summary')
+                field: run_id
+      - name: station_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_code
+      - name: is_delay_target
+        data_tests:
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "run_state = 'complete' and arr_delay_min is not null and not is_origin"
+              config:
+                where: "is_delay_target"
+
+  - name: agg_delay_stats
+    description: >
+      Gold. Arrival-delay distribution per train × station × run month, from delay-target rows (baseline B2).
+      pct_within_30min uses var on_time_threshold_min (default 30) and is 0–100.
+    columns:
+      - name: delay_stat_id
+        data_tests: [unique, not_null]
+      - name: n_runs
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+      - name: pct_within_30min
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: p90_arr_delay_min
+        data_tests:
+          - expression_is_true:
+              arguments:
+                expression: "p90_arr_delay_min >= p50_arr_delay_min"
+      - name: station_code
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_code
