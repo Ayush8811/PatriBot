@@ -33,8 +33,8 @@ def train_detail(data: PlannerData, train_no: str, today: date) -> TrainDetail |
                 dep=s.dep_time,
                 day=s.day_offset + 1,
                 distance_km=s.distance_km,
-                delay_p50_min=round(est.p50),
-                delay_p90_min=round(est.p90),
+                delay_p50_min=round(est.p50) if est.history_runs else None,
+                delay_p90_min=round(est.p90) if est.history_runs else None,
                 history_runs=est.history_runs,
             )
         )

@@ -9,7 +9,9 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
-MAX_WINDOW_DAYS = 31
+MAX_WINDOW_DAYS = 31  # date_from..date_to inclusive; longer windows are a 422
+DEFAULT_RESULTS = 10
+MAX_RESULTS = 20
 
 Objective = Literal["fastest", "most_reliable", "balanced"]
 HardConstraint = Literal["overnight", "arrive_by", "depart_after", "depart_before", "classes"]
@@ -47,7 +49,14 @@ class PlanRequest(BaseModel):
     date_from: date = Field(description="Departure-date window, inclusive.")
     date_to: date
     preferences: Preferences = Preferences()
-    max_results: int = Field(10, ge=1, le=50)
+    max_results: int = Field(
+        DEFAULT_RESULTS, ge=1, description=f"Default {DEFAULT_RESULTS}; values above {MAX_RESULTS} are capped."
+    )
+
+    @field_validator("max_results")
+    @classmethod
+    def _cap(cls, v: int) -> int:
+        return min(v, MAX_RESULTS)
 
     @model_validator(mode="after")
     def _window(self) -> PlanRequest:
@@ -143,8 +152,8 @@ class RouteStop(BaseModel):
     dep: str | None
     day: int
     distance_km: float | None
-    delay_p50_min: int
-    delay_p90_min: int
+    delay_p50_min: int | None = Field(description="Predicted arrival delay (P50); null when history_runs is 0.")
+    delay_p90_min: int | None = Field(description="Predicted arrival delay (P90); null when history_runs is 0.")
     history_runs: int
 
 

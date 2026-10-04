@@ -9,9 +9,11 @@ Data comes from the warehouse (DuckDB) or the Postgres serving copy, see patribo
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from collections.abc import Iterator
+from typing import Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +28,8 @@ from patribot.planner.schemas import ETA_MODEL, PlanRequest, PlanResponse, Train
 from patribot.planner.service import PlannerService
 
 API_PREFIX = "/api/v1"
-DEFAULT_CORS = "http://localhost:3000"
+DEFAULT_CORS = "http://localhost:3000,http://localhost:3100"  # web app: next dev, next start / e2e
+log = logging.getLogger(__name__)
 FREE_QUERIES_PER_DAY = 3  # BRD FR-23 default; the Phase 2 stub does not meter
 
 
@@ -115,6 +118,15 @@ def create_app(service: PlannerService | None = None) -> FastAPI:
     return app
 
 
+ChatErrorCode = Literal["quota_exhausted", "spend_guard", "server_error"]
+
+
+def chat_error(code: ChatErrorCode, detail: str) -> dict[str, str]:
+    """Payload of an SSE `error` event (docs/api/v1.md). The stub only emits server_error; quota_exhausted and
+    spend_guard arrive with metering in Phase 4 (BRD FR-23, FR-24)."""
+    return {"code": code, "detail": detail}
+
+
 def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -130,11 +142,23 @@ def _chat_events(s: PlannerService, body: ChatRequest) -> Iterator[str]:
             yield done
             return
         result = plan(data, parsed.request, s.today())
-    except places.UnknownPlace as exc:
-        yield sse("error", {"detail": f"unknown place: {exc.text}"})
+    except (places.UnknownPlace, SamePlace, ValueError) as exc:
+        # a question back, not an error (FR-3): the message was understood only in part
+        if isinstance(exc, places.UnknownPlace):
+            text = f"I don't know the place '{exc.text}'."
+        elif isinstance(exc, SamePlace):
+            text = "The origin and the destination are the same place."
+        else:  # PlanRequest validation, e.g. a date window longer than 31 days
+            text = "I couldn't turn that into a search (dates are limited to a 31-day window)."
+        yield sse("token", {"text": f"{text} Could you rephrase, e.g. 'Kolkata to Delhi, Nov 20-30'?"})
+        yield done
         return
-    except (RepositoryUnavailable, SamePlace, ValueError) as exc:
-        yield sse("error", {"detail": str(exc)})
+    except RepositoryUnavailable as exc:
+        yield sse("error", chat_error("server_error", f"data unavailable: {exc}"))
+        return
+    except Exception:  # never leak a stack trace into the stream
+        log.exception("chat stub failed")
+        yield sse("error", chat_error("server_error", "something went wrong, please try again"))
         return
     n = len(result.itineraries)
     text = (
