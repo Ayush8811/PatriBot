@@ -10,7 +10,7 @@ import pytest
 
 from patribot.collector.cli import main
 from patribot.collector.config import CollectorSettings, WatchedTrain, load_watchlist
-from patribot.collector.planner import due_runs, make_plan, remaining_budget, sampled_in, tier_b_stride
+from patribot.collector.planner import DueRun, due_runs, make_plan, remaining_budget, sampled_in, tier_b_rate
 from patribot.collector.store import DataStore, RunState
 from patribot.sources.base import FetchStatus, redact
 from patribot.sources.fixture import FixtureSource
@@ -67,21 +67,31 @@ def test_remaining_budget_spreads_monthly_cap():
     assert remaining_budget(s, {"2026-10-01": 1100}, date(2026, 10, 2)) == 2000 // 30
 
 
-def test_tier_b_stride_kicks_in_when_demand_exceeds_budget():
-    s = CollectorSettings(max_calls_per_month=3100, max_tier_b_stride=4)  # ~95 calls/day after headroom
-    trains = [train(f"1{i:04d}", tier="A") for i in range(50)] + [train(f"2{i:04d}", tier="B") for i in range(90)]
-    stride = tier_b_stride(trains, s, date(2026, 10, 1))
-    assert stride == 2  # 50 A + 90 B > 95; room for B = 45 -> 1 in 2
-    small = trains[:60]
-    assert tier_b_stride(small, s, date(2026, 10, 1)) == 1
+def test_tier_b_rate_trims_only_as_much_as_needed():
+    s = CollectorSettings(max_calls_per_month=3100, max_tier_b_stride=4)  # 100/day, 95 after headroom
+    a_trains = [train(f"1{i:04d}", tier="A") for i in range(50)]
+    b_trains = [train(f"2{i:04d}", tier="B") for i in range(90)]
+    assert tier_b_rate(a_trains + b_trains, s, date(2026, 10, 1)) == pytest.approx(45 / 90)
+    assert tier_b_rate(a_trains + b_trains[:47], s, date(2026, 10, 1)) == pytest.approx(45 / 47)  # slight trim
+    assert tier_b_rate(a_trains + b_trains[:40], s, date(2026, 10, 1)) == 1.0
+    many_a = [train(f"1{i:04d}", tier="A") for i in range(120)]
+    assert tier_b_rate(many_a + b_trains, s, date(2026, 10, 1)) == 0.25  # floor = 1 / max_tier_b_stride
 
 
-def test_sampling_is_deterministic():
-    from patribot.collector.planner import DueRun
+def test_tier_b_rate_uses_what_is_left_of_the_month():
+    s = CollectorSettings(max_calls_per_month=3100)
+    trains = [train(f"2{i:04d}", tier="B") for i in range(90)]
+    # half the month gone but most of the budget unused -> more room per remaining day
+    assert tier_b_rate(trains, s, date(2026, 10, 16), {"2026-10-01": 100}) == 1.0
+    assert tier_b_rate(trains, s, date(2026, 10, 16), {"2026-10-01": 2000}) < 1.0
 
-    r = DueRun("12345", date(2026, 10, 5), "B")
-    assert sampled_in(r, 3) == sampled_in(r, 3)
-    assert sampled_in(r, 1)
+
+def test_sampling_is_deterministic_and_proportional():
+    runs = [DueRun(f"2{i:04d}", date(2026, 10, 5), "B") for i in range(4000)]
+    picked = sum(sampled_in(r, 0.3) for r in runs)
+    assert 0.27 * 4000 < picked < 0.33 * 4000
+    assert [sampled_in(r, 0.3) for r in runs] == [sampled_in(r, 0.3) for r in runs]
+    assert all(sampled_in(r, 1.0) for r in runs)
 
 
 def test_plan_prioritises_tier_a_and_respects_budget():

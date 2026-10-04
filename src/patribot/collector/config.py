@@ -17,7 +17,7 @@ class CollectorSettings(BaseModel):
     lookback_days: int = Field(3, ge=0, le=30)
     grace_hours: float = Field(6, ge=0)
     max_attempts: int = Field(3, ge=1)
-    max_tier_b_stride: int = Field(4, ge=1)
+    max_tier_b_stride: int = Field(4, ge=1)  # tier-B sampling never drops below 1 / max_tier_b_stride
 
 
 class WatchedTrain(BaseModel):

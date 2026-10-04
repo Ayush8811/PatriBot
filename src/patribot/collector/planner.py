@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import calendar
-import math
 import zlib
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -28,7 +27,7 @@ class Plan:
     due_total: int
     sampled_out: int  # tier-B runs skipped by sampling
     over_budget: int  # due runs left for a later collector run because today's allowance is spent
-    tier_b_stride: int
+    tier_b_rate: float  # fraction of tier-B runs collected
     remaining_budget: int
 
 
@@ -68,23 +67,29 @@ def remaining_budget(settings: CollectorSettings, usage_by_day: dict[str, int], 
     return max(0, allowance_today - used_today)
 
 
-def tier_b_stride(trains: list[WatchedTrain], settings: CollectorSettings, today: date) -> int:
-    """1 = collect every tier-B run; n = collect roughly 1 in n, so expected demand fits the budget."""
+def tier_b_rate(
+    trains: list[WatchedTrain], settings: CollectorSettings, today: date, usage_by_day: dict[str, int] | None = None
+) -> float:
+    """Fraction of tier-B runs to collect (1.0 = all) so expected daily demand fits what is left of the monthly budget.
+
+    Fractional rather than "1 in n", so a budget that is only slightly short trims tier B only slightly.
+    Never below 1 / max_tier_b_stride.
+    """
     days_in_month = calendar.monthrange(today.year, today.month)[1]
-    daily_budget = settings.max_calls_per_month / days_in_month * BUDGET_HEADROOM
+    used_before = sum(v for d, v in (usage_by_day or {}).items() if d < today.isoformat())
+    days_left = days_in_month - today.day + 1
+    daily_budget = max(0, settings.max_calls_per_month - used_before) / days_left * BUDGET_HEADROOM
     a = sum(len(t.run_days) / 7 for t in trains if t.tier == "A")
     b = sum(len(t.run_days) / 7 for t in trains if t.tier == "B")
+    floor = 1 / settings.max_tier_b_stride
     if b == 0 or a + b <= daily_budget:
-        return 1
-    room = daily_budget - a
-    if room <= 0:
-        return settings.max_tier_b_stride
-    return min(settings.max_tier_b_stride, math.ceil(b / room))
+        return 1.0
+    return max(floor, min(1.0, (daily_budget - a) / b))
 
 
-def sampled_in(run: DueRun, stride: int) -> bool:
+def sampled_in(run: DueRun, rate: float) -> bool:
     # crc32, not hash(): must be stable across processes so a sampled-out run stays sampled out
-    return stride <= 1 or zlib.crc32(f"{run.train_no}|{run.start_date}".encode()) % stride == 0
+    return rate >= 1.0 or zlib.crc32(f"{run.train_no}|{run.start_date}".encode()) % 10_000 < rate * 10_000
 
 
 def make_plan(
@@ -96,12 +101,12 @@ def make_plan(
 ) -> Plan:
     today = now_local.date()
     due = due_runs(trains, settings, now_local, manifest)
-    stride = tier_b_stride(trains, settings, today)
+    rate = tier_b_rate(trains, settings, today, usage_by_day)
     budget = remaining_budget(settings, usage_by_day, today)
 
     tier_a = sorted((r for r in due if r.tier == "A"), key=lambda r: r.start_date)
     tier_b_all = [r for r in due if r.tier == "B"]
-    tier_b = sorted((r for r in tier_b_all if sampled_in(r, stride)), key=lambda r: r.start_date)
+    tier_b = sorted((r for r in tier_b_all if sampled_in(r, rate)), key=lambda r: r.start_date)
     ordered = tier_a + tier_b  # oldest first: those are closest to falling out of the look-back window
 
     return Plan(
@@ -109,6 +114,6 @@ def make_plan(
         due_total=len(due),
         sampled_out=len(tier_b_all) - len(tier_b),
         over_budget=max(0, len(ordered) - budget),
-        tier_b_stride=stride,
+        tier_b_rate=round(rate, 3),
         remaining_budget=budget,
     )
