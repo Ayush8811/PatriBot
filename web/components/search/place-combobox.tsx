@@ -4,8 +4,10 @@ import * as React from "react";
 import { Building2, Loader2, MapPin, TrainTrack } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { WakingUpNotice } from "@/components/waking-up";
 import { api } from "@/lib/api";
 import type { Place } from "@/lib/api/types";
+import { useSlow } from "@/lib/use-slow";
 import { cn } from "@/lib/utils";
 
 export interface PlaceValue {
@@ -40,6 +42,7 @@ export function PlaceCombobox({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const listId = `${id}-listbox`;
+  const slow = useSlow(loading ? text.trim() : null);
 
   // Keep the text in sync when the value is set from outside (swap, popular routes).
   const [lastValue, setLastValue] = React.useState(value);
@@ -135,6 +138,11 @@ export function PlaceCombobox({
           className="bg-popover text-popover-foreground absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg border p-1 shadow-lg"
         >
           {error && <li className="text-bad px-3 py-2 text-sm">{error}</li>}
+          {!error && loading && slow && results.length === 0 && (
+            <li>
+              <WakingUpNotice compact />
+            </li>
+          )}
           {!error && !loading && results.length === 0 && (
             <li className="text-muted-foreground px-3 py-2 text-sm">No matching city or station</li>
           )}

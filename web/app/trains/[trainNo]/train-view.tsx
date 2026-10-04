@@ -14,6 +14,8 @@ import { ApiError, api } from "@/lib/api";
 import type { PerformanceResponse, TrainResponse, Weekday } from "@/lib/api/types";
 import { formatDelayShort } from "@/lib/format";
 import { useAsync } from "@/lib/use-async";
+import { useSlow } from "@/lib/use-slow";
+import { WakingUpNotice } from "@/components/waking-up";
 import { cn } from "@/lib/utils";
 
 const DAYS: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
@@ -21,10 +23,12 @@ const DAYS: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 export function TrainView({ trainNo }: { trainNo: string }) {
   const train = useAsync<TrainResponse>(`train:${trainNo}`, (signal) => api.train(trainNo, { signal }));
   const perf = useAsync<PerformanceResponse>(`perf:${trainNo}`, (signal) => api.performance(trainNo, 3, { signal }));
+  const slow = useSlow(train.status === "loading" ? `train:${trainNo}` : null);
 
   if (train.status === "loading") {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Loading train">
+        {slow && <WakingUpNotice />}
         <Skeleton className="h-8 w-72" />
         <Skeleton className="h-4 w-48" />
         <Skeleton className="h-64 w-full" />

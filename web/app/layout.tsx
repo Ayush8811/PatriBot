@@ -5,6 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme";
+import { getViewer } from "@/lib/auth/viewer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,8 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const viewer = await getViewer();
   return (
     <html lang="en-IN" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col font-sans">
@@ -31,7 +33,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           >
             Skip to content
           </a>
-          <SiteHeader />
+          <SiteHeader
+            viewer={{ user: viewer.status === "ok" ? viewer.user : null, authDisabled: viewer.status === "disabled" }}
+          />
           <main id="main" className="flex flex-1 flex-col">
             {children}
           </main>

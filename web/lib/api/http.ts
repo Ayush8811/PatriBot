@@ -36,17 +36,33 @@ export interface PatriBotApi {
   chat(req: ChatRequest, opts?: RequestOptions): AsyncIterable<ChatEvent>;
 }
 
+/** The session expired (the proxy answered 401): send the viewer to the login page, then back here. */
+function handleUnauthenticated(res: Response): boolean {
+  if (res.status !== 401 || res.headers.get("x-patribot-auth") !== "required") return false;
+  if (typeof window !== "undefined") {
+    const here = `${window.location.pathname}${window.location.search}`;
+    // A full page load on purpose: the session is gone, so no client state is worth keeping.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/login?${new URLSearchParams({ next: here })}`);
+  }
+  return true;
+}
+
+const UNREACHABLE = "Could not reach the PatriBot server. Check your connection and try again.";
+
 async function request<T>(path: string, init: RequestInit & RequestOptions = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      credentials: "same-origin",
       headers: { Accept: "application/json", ...(init.body ? { "Content-Type": "application/json" } : {}), ...init.headers },
     });
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
-    throw new ApiError(0, `Could not reach the PatriBot API at ${API_BASE_URL}`);
+    throw new ApiError(0, UNREACHABLE);
   }
+  if (handleUnauthenticated(res)) throw new ApiError(401, "Your session has expired. Please sign in again.");
   if (!res.ok) {
     let detail: ErrorBody["detail"] | string = res.statusText || `HTTP ${res.status}`;
     try {
@@ -78,13 +94,18 @@ export const httpApi: PatriBotApi = {
     try {
       res = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify(req),
         signal: opts?.signal,
       });
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
-      yield { event: "error", data: { detail: `Could not reach the PatriBot API at ${API_BASE_URL}` } };
+      yield { event: "error", data: { detail: UNREACHABLE } };
+      return;
+    }
+    if (handleUnauthenticated(res)) {
+      yield { event: "error", data: { detail: "Your session has expired. Please sign in again." } };
       return;
     }
     if (!res.ok || !res.body) {

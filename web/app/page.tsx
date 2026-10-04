@@ -59,7 +59,7 @@ export default function HomePage() {
           <MessageSquareText className="size-4" aria-hidden />
           Prefer to just ask?{" "}
           <Link href="/chat" className="text-primary font-medium underline-offset-4 hover:underline">
-            Describe your trip to PatriBot
+            Plain-language trip planning is coming soon
           </Link>
         </p>
 
