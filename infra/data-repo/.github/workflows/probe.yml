@@ -2,6 +2,8 @@ name: probe
 
 # Manual check of the provider: past-date depth and response schema (docs/phase0/02-collector-setup.md).
 # Saves the output to probe/<date>/ in this private repo.
+# Also runs when probe-request.txt is pushed (line 1: train number, line 2: days back), so it can be
+# triggered by a commit when manual dispatch isn't available.
 
 on:
   workflow_dispatch:
@@ -12,6 +14,9 @@ on:
       days_back:
         description: Past days to try
         default: "7"
+  push:
+    branches: [main]
+    paths: [probe-request.txt]
 
 permissions:
   contents: write
@@ -32,10 +37,15 @@ jobs:
         env:
           RAIL_API_KEY: ${{ secrets.RAIL_API_KEY }}
         run: |
+          train="${{ inputs.train }}"; days="${{ inputs.days_back }}"
+          if [ -z "$train" ] && [ -f probe-request.txt ]; then
+            train=$(sed -n 1p probe-request.txt | tr -dc '0-9'); days=$(sed -n 2p probe-request.txt | tr -dc '0-9')
+          fi
+          train=${train:-12301}; days=${days:-7}
           out="probe/$(date -u +%Y-%m-%d)"
           mkdir -p "$out"
           uv run --project .code --frozen patribot-collector probe --source "${{ vars.RAIL_SOURCE || 'railkit' }}" \
-            --train "${{ inputs.train }}" --days-back "${{ inputs.days_back }}" --samples-dir "$out" | tee "$out/summary.txt"
+            --train "$train" --days-back "$days" --samples-dir "$out" | tee "$out/summary.txt"
       - name: Commit
         run: |
           git config user.name "patribot-collector"

@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 patribot-collector = "patribot.collector.cli:main"
+patribot-watchlist = "patribot.watchlist.cli:main"
 
 [dependency-groups]
 dev = [
