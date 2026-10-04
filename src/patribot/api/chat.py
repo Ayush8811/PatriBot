@@ -17,7 +17,9 @@ from patribot.planner.model import PlannerData
 from patribot.planner.places import CLUSTER_ALIASES, station_key
 from patribot.planner.schemas import PlanRequest, Preferences
 
-MONTHS = {m: i for i, m in enumerate(("jan feb mar apr may jun jul aug sep oct nov dec").split(), 1)}
+MONTHS = {
+    m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)
+}
 _MON = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
 CLASS_WORDS = {
     "1a": "1A", "1ac": "1A", "2a": "2A", "2ac": "2A", "3a": "3A", "3ac": "3A", "3e": "3E", "sl": "SL",
@@ -152,5 +154,7 @@ def summarise(req: PlanRequest) -> str:
         bits.append("class " + "/".join(p.classes))
     if p.allow_split:
         bits.append("split journeys allowed")
-    bits.append({"fastest": "fastest first", "most_reliable": "most reliable first", "balanced": "balanced"}[p.objective])
+    bits.append(
+        {"fastest": "fastest first", "most_reliable": "most reliable first", "balanced": "balanced"}[p.objective]
+    )
     return f"{req.origin} → {req.destination}, {when} ({', '.join(bits)})"

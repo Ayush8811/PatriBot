@@ -276,4 +276,3 @@ def split_options(
                 options.sort(key=lambda c: (c.last.arr_p50, -c.reliability))
                 out.extend(options[: cfg.leg2_options_per_leg1])
     return out
-

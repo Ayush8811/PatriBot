@@ -12,17 +12,15 @@ from pathlib import Path
 
 import duckdb
 
-from tests.conftest import load_sample_script as _load_sample_script
-
 REPO = Path(__file__).resolve().parents[1]
 
 
-def test_sample_generator_is_deterministic(tmp_path):
-    mod = _load_sample_script()
+def test_sample_generator_is_deterministic(tmp_path, sample_script):
+    mod = sample_script
     mod.generate(tmp_path / "a", date(2026, 12, 30), days=3)
     mod.generate(tmp_path / "b", date(2026, 12, 30), days=3)
-    files_a = sorted(p.relative_to(tmp_path / "a") for p in (tmp_path / "a").rglob("*.jsonl.gz"))
-    files_b = sorted(p.relative_to(tmp_path / "b") for p in (tmp_path / "b").rglob("*.jsonl.gz"))
+    files_a = sorted(p.relative_to(tmp_path / "a") for p in (tmp_path / "a").rglob("*.gz"))
+    files_b = sorted(p.relative_to(tmp_path / "b") for p in (tmp_path / "b").rglob("*.gz"))
     assert files_a == files_b and files_a
     for rel in files_a:
         assert gzip.decompress((tmp_path / "a" / rel).read_bytes()) == gzip.decompress(
@@ -68,13 +66,54 @@ def test_dbt_build_produces_gold_tables(built_warehouse):
     con.close()
 
 
+def test_timetable_and_calendar_reach_gold(built_warehouse):
+    db, _, _ = built_warehouse
+    con = duckdb.connect(str(db), read_only=True)
+    # every sample train has a schedule; timetable-only trains (no runs) are in dim_train too
+    n_trains, n_tt, n_runs_only = con.sql(
+        "select count(*), count(*) filter (where has_timetable), count(*) filter (where not has_timetable)"
+        " from gold.dim_train"
+    ).fetchone()
+    assert n_tt == n_trains and n_runs_only == 0
+    assert con.sql("select n_runs_attempted from gold.dim_train where train_no = '22999'").fetchone()[0] == 0
+    assert con.sql("select running_days from gold.dim_train where train_no = '22998'").fetchone()[0] == "MON,WED,FRI"
+    # minutes from the origin departure increase along each route; arrivals after midnight land on day 1+
+    bad = con.sql(
+        "select count(*) from (select dep_min, lag(dep_min) over (partition by train_no order by seq) as prev"
+        " from gold.dim_train_schedule) where dep_min <= prev"
+    ).fetchone()[0]
+    assert bad == 0
+    assert con.sql("select max(day_offset) from gold.dim_train_schedule").fetchone()[0] >= 1
+    # corridor membership (D10): the Howrah Rajdhani is an end-to-end KOL-DEL train; Kanpur → Delhi is a member
+    # starting mid-path; a train is in a corridor once
+    row = con.sql(
+        "select direction, serves_both_ends from gold.dim_train_corridor where train_no = '12301'"
+        " and corridor_id = 'KOL-DEL'"
+    ).fetchone()
+    assert row == ("AB", True)
+    assert con.sql(
+        "select serves_both_ends from gold.dim_train_corridor where train_no = '22999' and corridor_id = 'KOL-DEL'"
+    ).fetchone() == (False,)
+    # stations carry coordinates from the timetable
+    assert con.sql("select lat is not null from gold.dim_station where station_code = 'HWH'").fetchone()[0]
+    # calendar: fog season on the northern corridors, festival windows, approximate rows flagged
+    fog, corridors, approx = con.sql(
+        "select is_fog_season, fog_corridors, any_approximate from gold.dim_date where date_day = date '2027-01-10'"
+    ).fetchone()
+    assert fog and "KOL-DEL" in corridors and approx
+    assert not con.sql("select is_fog_season from gold.dim_date where date_day = date '2027-03-01'").fetchone()[0]
+    assert con.sql("select is_festival_window from gold.dim_date where date_day = date '2026-11-08'").fetchone()[0]
+    con.close()
+
+
 def test_dagster_definitions_load(built_warehouse, tmp_path):
     db, _, _ = built_warehouse
     env = {**os.environ, "PATRIBOT_WAREHOUSE_DIR": str(db.parent), "PATRIBOT_DATA_DIR": str(tmp_path)}
     code = (
         "from pipelines.definitions import defs; g = defs.resolve_asset_graph(); "
         "keys = {k.to_user_string() for k in g.get_all_asset_keys()}; "
-        "need = {'bronze/running_status', 'silver_input/runs', 'gold/fct_run_stop_delay', 'serving/postgres'}; "
+        "need = {'bronze/running_status', 'silver_input/runs', 'gold/fct_run_stop_delay', 'serving/postgres', "
+        "'bronze/timetable_cache', 'silver_input/train_schedule', 'gold/dim_train_corridor'}; "
         "assert need <= keys, keys; "
         "assert g.get(next(k for k in g.get_all_asset_keys() if k.to_user_string() == 'silver/stg_train_run_stop'))"
         ".parent_keys == {next(k for k in g.get_all_asset_keys() if k.to_user_string() == 'silver_input/stops')}; "

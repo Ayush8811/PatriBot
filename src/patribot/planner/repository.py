@@ -100,11 +100,15 @@ class SqlRepository:
 
     def load(self) -> PlannerData:
         stations = {
-            r["station_code"]: Station(r["station_code"], r["station_name"], r["cluster_id"], _f(r["lat"]), _f(r["lon"]))
+            r["station_code"]: Station(
+                r["station_code"], r["station_name"], r["cluster_id"], _f(r["lat"]), _f(r["lon"])
+            )
             for r in self._q("select station_code, station_name, cluster_id, lat, lon from {dim_station}")
         }
         clusters: dict[str, list[str]] = defaultdict(list)
-        for r in self._q("select cluster_id, station_code from {dim_station_cluster} order by cluster_id, cluster_rank"):
+        for r in self._q(
+            "select cluster_id, station_code from {dim_station_cluster} order by cluster_id, cluster_rank"
+        ):
             clusters[r["cluster_id"]].append(r["station_code"])
 
         stops: dict[str, list[Stop]] = defaultdict(list)

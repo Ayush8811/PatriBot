@@ -295,9 +295,30 @@ def generate(out: Path, start: date, days: int, seed: int = 7, watchlist: Path |
 # Timetable-only trains: no running history, so the planner falls back to coarser delay estimates for them.
 # (train_no, name, type, station-timetable type, origin, destination, departure, journey minutes, run days, classes)
 EXTRA_TRAINS: list[tuple[str, str, str, str, str, str, str, int, list[str], str]] = [
-    ("22999", "Sample Kanpur Delhi SF", "SUPERFAST", "Superfast", "CNB", "NDLS", "06:30", 330, list(WEEKDAYS), "2A,3A,SL"),
-    ("22998", "Sample Howrah Gaya Exp", "MAIL_EXPRESS", "Mail Express", "HWH", "GAYA", "21:40", 500,
-     ["MON", "WED", "FRI"], "2A,3A,SL,GEN"),
+    (
+        "22999",
+        "Sample Kanpur Delhi SF",
+        "SUPERFAST",
+        "Superfast",
+        "CNB",
+        "NDLS",
+        "06:30",
+        330,
+        list(WEEKDAYS),
+        "2A,3A,SL",
+    ),
+    (
+        "22998",
+        "Sample Howrah Gaya Exp",
+        "MAIL_EXPRESS",
+        "Mail Express",
+        "HWH",
+        "GAYA",
+        "21:40",
+        500,
+        ["MON", "WED", "FRI"],
+        "2A,3A,SL,GEN",
+    ),
 ]
 DETAIL_TYPES = {"RAJDHANI": "Rajdhani", "DURONTO": "Duronto Express", "SHATABDI": "Shatabdi", "VANDE": "Vande Bharat"}
 

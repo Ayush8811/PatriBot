@@ -38,7 +38,6 @@ from patribot.sources.railkit_timetable import (
     normalize_train_no,
     parse_hhmm,
     parse_number,
-    parse_running_days,
     parse_schedule,
     parse_stop,
 )

@@ -70,10 +70,8 @@ def _enough(stat: DelayStat | None) -> DelayStat | None:
 
 def _scaled(stat: DelayStat, fraction: float, runs: int, basis: str, rel_weight: float = 1.0) -> DelayEstimate:
     p50, p90 = stat.p50 * fraction, max(stat.p90, stat.p50) * fraction
-    if fraction >= 0.95 and stat.pct_within is not None:
-        rel = stat.pct_within
-    else:
-        rel = prob_within(p50, p90)
+    # near the end of the route the train's own on-time share applies; elsewhere a normal fit to the scaled spread
+    rel = stat.pct_within if fraction >= 0.95 and stat.pct_within is not None else prob_within(p50, p90)
     rel = rel_weight * rel + (1 - rel_weight) * NO_HISTORY_RELIABILITY
     return DelayEstimate(p50, p90, rel, runs, basis)
 

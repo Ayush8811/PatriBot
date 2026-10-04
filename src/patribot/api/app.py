@@ -75,7 +75,9 @@ def create_app(service: PlannerService | None = None) -> FastAPI:
         return JSONResponse({"status": "ok", "data_as_of": as_of, "eta_model": ETA_MODEL})
 
     @router.get("/places/search")
-    def places_search(request: Request, q: str = Query(min_length=1, max_length=64), limit: int = Query(10, ge=1, le=50)):
+    def places_search(
+        request: Request, q: str = Query(min_length=1, max_length=64), limit: int = Query(10, ge=1, le=50)
+    ):
         results = places.search(svc(request).data(), q, limit)
         return {"results": [r.model_dump_contract() for r in results]}
 

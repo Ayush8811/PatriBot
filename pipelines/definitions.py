@@ -136,9 +136,7 @@ def bronze_timetable_cache(context: AssetExecutionContext) -> MaterializeResult:
     specs=[
         AssetSpec(TT_SCHEDULE_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="Train × timetable stop."),
         AssetSpec(TT_INFO_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="One row per timetabled train."),
-        AssetSpec(
-            TT_CORRIDOR_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="Corridor membership (D10)."
-        ),
+        AssetSpec(TT_CORRIDOR_KEY, deps=[TIMETABLE_KEY], group_name="silver", description="Corridor membership (D10)."),
     ],
 )
 def silver_timetable(context: AssetExecutionContext):
@@ -206,7 +204,14 @@ def serving_postgres(context: AssetExecutionContext) -> MaterializeResult:
 daily_refresh = define_asset_job("daily_refresh", selection=AssetSelection.all())
 
 defs = Definitions(
-    assets=[bronze_running_status, silver_input, bronze_timetable_cache, silver_timetable, patribot_dbt_assets, serving_postgres],
+    assets=[
+        bronze_running_status,
+        silver_input,
+        bronze_timetable_cache,
+        silver_timetable,
+        patribot_dbt_assets,
+        serving_postgres,
+    ],
     asset_checks=[silver_input_runs_fresh],
     jobs=[daily_refresh],
     # after the collector's 00:17 UTC (05:47 IST) run; update the patribot-data checkout before this fires
