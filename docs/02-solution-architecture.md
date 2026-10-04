@@ -80,7 +80,7 @@ The local stack runs `git pull` on `patribot-data` (a Dagster sensor) and proces
 | 2 | **Delhi ↔ Patna** | NDLS, DLI, ANVT, NZM | PNBE, RJPB, PPTA, DNR | Mostly a subset of 1(b) | Heavy delays and rush periods. **Almost no extra data cost**, because its trains are already in corridor 1 |
 | 3 | **Mumbai ↔ Delhi** | CSMT, MMCT, BDTS, LTT, DR | NDLS, NZM, DLI | (a) Western: Surat–Vadodara–Ratlam–Kota–Mathura. (b) Central: Bhusaval–Itarsi–Bhopal–Jhansi–Agra | Different zones (Western/Central). Tests generalisation |
 | 4 | **Bengaluru ↔ Hyderabad** | SBC, YPR, SMVB | SC, HYB, KCG | Dharmavaram–Anantapur–Guntakal–Kurnool–Mahbubnagar | Southern overnight corridor. Low fog. Contrast case |
-| 5 | **Kolkata ↔ Chennai** | HWH, SHM, SRC, KOAA | MAS, MS, MMCC, TBM | East Coast: Kharagpur–Balasore–Bhubaneswar–Visakhapatnam–Vijayawada–Gudur | Long (about 1,650 km) overnight-plus journeys. Cyclone and monsoon effects. Shares the Kolkata cluster with corridor 1 |
+| 5 | **Kolkata ↔ Chennai** | HWH, SHM, SRC, KOAA | MAS, MS, TBM | East Coast: Kharagpur–Balasore–Bhubaneswar–Visakhapatnam–Vijayawada–Gudur | Long (about 1,650 km) overnight-plus journeys. Cyclone and monsoon effects. Shares the Kolkata cluster with corridor 1 |
 
 ### 3.2 Which trains belong to a corridor (D10)
 A corridor is a **path**: an ordered list of main-line segments between junctions, possibly with alternative
@@ -105,10 +105,11 @@ per **segment** as well as per train, so intermediate-origin trains add training
 ```python
 class TimetableSource(Protocol):
     def list_trains_between(self, src: str, dst: str) -> list[TrainSummary]: ...
-    def get_schedule(self, train_no: str) -> TrainSchedule: ...        # stops, times, day offsets, days of run
+    def get_schedule(self, train_no: str) -> TrainSchedule: ...  # stops, times, day offsets, days of run
+
 
 class RunningStatusSource(Protocol):
-    def get_run(self, train_no: str, start_date: date) -> RunStatus: ... # actual arr/dep per stop
+    def get_run(self, train_no: str, start_date: date) -> RunStatus: ...  # actual arr/dep per stop
 ```
 Concrete adapters: `RapidApiRailAdapter`, `IndianRailApiAdapter` (both candidates), `OpenDataTimetableAdapter`
 (open datasets), and later `PartnerAdapter` for a buyer's own feed.
@@ -358,22 +359,26 @@ counted call, response-cache hit), `llm_usage` (request id, model, tokens in, ca
 4. **Ops dashboard** (admin): pipeline freshness, collector calls used vs. budget, model metrics (MAE, coverage), LLM spend vs. budget, and quota usage.
 
 ## 11. Repository layout
+The code starts as a single Python package (`src/patribot/`) with subpackages. It is split into a uv workspace only
+if build or deploy boundaries require it.
 ```
 PatriBot/
-├── docs/                      # BRD, architecture, ADRs
-├── collector/                 # standalone daily collector (GitHub Actions entrypoint)
-├── packages/
-│   ├── patribot_sources/      # source adapters (Protocol + implementations)
-│   ├── patribot_planner/      # search, split journeys, ranking
-│   ├── patribot_ml/           # features, training, inference, evaluation
-│   └── patribot_agent/        # Claude agent, tools, RAG
-├── pipelines/                 # Dagster definitions (assets, schedules, checks)
-├── dbt/                       # dbt project (bronze→silver→gold)
-├── api/                       # FastAPI service
-├── web/                       # Next.js app
-├── evals/                     # golden queries and eval runner
-├── infra/                     # docker-compose, Dockerfiles, (later) Terraform
-└── .github/workflows/         # CI + collector cron
+├── docs/                      # BRD, architecture, phase notes
+├── config/                    # corridors.yaml, watchlist.yaml (collector)
+├── src/patribot/
+│   ├── sources/               # source adapters (Protocol + implementations)        ✅ Phase 0
+│   ├── collector/             # budgeted daily collector + CLI                      ✅ Phase 0
+│   ├── planner/               # search, split journeys, ranking                     Phase 2
+│   ├── ml/                    # features, training, inference, evaluation           Phase 5
+│   └── agent/                 # Claude parse/explain, RAG                           Phase 4
+├── pipelines/                 # Dagster definitions                                 Phase 1
+├── dbt/                       # dbt project (bronze→silver→gold)                    Phase 1
+├── api/                       # FastAPI service                                     Phase 2
+├── web/                       # Next.js app                                         Phase 3
+├── evals/                     # golden queries and eval runner                      Phase 4
+├── infra/                     # docker-compose, Dockerfiles                         Phase 1
+├── tests/
+└── .github/workflows/         # ci.yml, collector.yml                               ✅ Phase 0
 ```
 
 ## 12. Security and compliance

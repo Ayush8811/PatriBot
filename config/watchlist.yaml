@@ -1,0 +1,25 @@
+# Collector watchlist: which train runs to collect, plus the collector budget settings.
+#
+# PHASE 0 SEED. Phase 1 replaces this list with one generated from timetable data and corridor membership
+# (dbt `dim_train_corridor`), giving roughly 500–700 trains. Departure times and journey durations here are
+# approximate. The collector only uses them to decide when a run has finished, with a grace period, so small
+# errors are harmless. Run days default to daily: a non-running day costs one call and is recorded, not retried.
+#
+# tier A = every run collected; tier B = sampled when the monthly budget is tight (architecture doc §4.2).
+
+collector:
+  timezone: Asia/Kolkata
+  max_calls_per_month: 15000
+  lookback_days: 3          # set to the provider's verified past-date depth after the probe
+  grace_hours: 6            # wait this long after scheduled arrival before collecting
+  max_attempts: 3           # per run, for retryable outcomes
+  max_tier_b_stride: 4      # sample at most 1 in 4 tier-B runs when the budget is very tight
+
+trains:
+  - {train_no: "12301", name: "Howrah - New Delhi Rajdhani", corridors: [KOL-DEL], tier: A, dep_time: "16:50", journey_minutes: 1050}
+  - {train_no: "12313", name: "Sealdah - New Delhi Rajdhani", corridors: [KOL-DEL], tier: A, dep_time: "16:50", journey_minutes: 1110}
+  - {train_no: "12273", name: "Howrah - New Delhi Duronto", corridors: [KOL-DEL], tier: A, dep_time: "08:35", journey_minutes: 1140}
+  - {train_no: "12381", name: "Poorva Express", corridors: [KOL-DEL], tier: A, dep_time: "08:15", journey_minutes: 1410}
+  - {train_no: "12309", name: "Rajendra Nagar - New Delhi Rajdhani", corridors: [DEL-PAT, KOL-DEL], tier: A, dep_time: "19:10", journey_minutes: 780}
+  - {train_no: "12951", name: "Mumbai Central - New Delhi Rajdhani", corridors: [MUM-DEL], tier: A, dep_time: "17:00", journey_minutes: 960}
+  - {train_no: "12841", name: "Coromandel Express", corridors: [KOL-MAS], tier: A, dep_time: "15:20", journey_minutes: 1620}
