@@ -1,0 +1,47 @@
+name: patribot
+version: "0.1.0"
+config-version: 2
+profile: patribot
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: target
+clean-targets: [target, dbt_packages, logs]
+
+flags:
+  send_anonymous_usage_stats: false  # no network calls from local runs or CI
+
+vars:
+  # Runs whose worst stop delay exceeds this are kept but flagged as disruptions and left out of delay targets
+  # (architecture doc §5.2: clip outliers, keep them separately).
+  delay_outlier_min: 720
+  # "On time" for reliability stats and the product's reliability score (architecture doc §6).
+  on_time_threshold_min: 30
+
+seeds:
+  patribot:
+    +schema: ref
+    +meta: {dagster: {group: reference}}
+    seed_station_cluster:
+      +column_types: {cluster_id: varchar, station_code: varchar, cluster_rank: integer}
+    seed_corridor:
+      +column_types:
+        {corridor_id: varchar, corridor_name: varchar, cluster_a: varchar, cluster_b: varchar, is_primary: boolean, verified: boolean}
+    seed_corridor_waypoint:
+      +column_types: {corridor_id: varchar, path_name: varchar, waypoint_seq: integer, station_code: varchar}
+    seed_corridor_split_hub:
+      +column_types: {corridor_id: varchar, station_code: varchar}
+    seed_corridor_membership_param:
+      +column_types: {param: varchar, value: varchar}
+
+models:
+  patribot:
+    +materialized: table
+    staging:
+      +schema: silver
+      +meta: {dagster: {group: silver}}
+    marts:
+      +schema: gold
+      +meta: {dagster: {group: gold}}

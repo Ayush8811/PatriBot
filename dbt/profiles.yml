@@ -1,0 +1,11 @@
+# dbt-duckdb profile. PATRIBOT_WAREHOUSE_DIR defaults to `warehouse`, relative to the directory dbt runs from
+# (run dbt from the repo root: `uv run dbt build --project-dir dbt --profiles-dir dbt`). Dagster sets it absolute.
+patribot:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('PATRIBOT_WAREHOUSE_DIR', 'warehouse') }}/patribot.duckdb"
+      threads: 4
+      settings:
+        TimeZone: Asia/Kolkata
