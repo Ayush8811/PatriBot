@@ -17,3 +17,25 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+
+  # Phase 1 data platform end to end on synthetic data: no network beyond package install, no Postgres
+  # (PATRIBOT_PG_DSN is unset, so the reverse-ETL asset skips itself; tests cover it with a fake connection).
+  data-platform:
+    runs-on: ubuntu-latest
+    env:
+      PATRIBOT_DATA_DIR: ${{ github.workspace }}/samples/bronze
+      PATRIBOT_WAREHOUSE_DIR: ${{ github.workspace }}/warehouse
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: dbt seeds match config/corridors.yaml
+        run: uv run python -m patribot.transform.seeds --check
+      - name: Generate synthetic bronze
+        run: uv run python scripts/make_sample_bronze.py --out samples/bronze
+      - name: Bronze → silver input (Parquet)
+        run: uv run python -m patribot.transform.bronze
+      - name: dbt build (models + data tests)
+        run: uv run dbt build --project-dir dbt --profiles-dir dbt
+      - name: Dagster daily job (bronze → silver → dbt → reverse ETL skipped)
+        run: uv run dagster job execute -m pipelines.definitions -j daily_refresh

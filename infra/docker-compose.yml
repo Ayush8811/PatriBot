@@ -1,0 +1,29 @@
+# Local serving database (architecture doc §5.3, §10): Postgres 16 + pgvector.
+#
+#   cp .env.example .env               # once, at the repo root; adjust the password
+#   docker compose -f infra/docker-compose.yml --env-file .env up -d
+#
+# The reverse-ETL asset writes gold tables into schema `serving` (PATRIBOT_PG_DSN).
+name: patribot
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-patribot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patribot}
+      POSTGRES_DB: ${POSTGRES_DB:-patribot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

@@ -13,3 +13,12 @@ samples/
 /watchlist.yaml
 /watchlist-report.json
 .watchlist-cache/
+# Phase 1 data platform: local warehouse, dbt and Dagster artefacts
+warehouse/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+logs/
+.tmp_dagster_home_*/
+.dagster_home/

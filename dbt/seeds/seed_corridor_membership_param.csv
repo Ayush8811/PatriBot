@@ -1,0 +1,4 @@
+param,value
+min_km,150
+min_consecutive_segments,2
+exclude_train_types,MEMU|DEMU|EMU|PASSENGER|UNRESERVED

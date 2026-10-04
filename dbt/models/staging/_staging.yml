@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: stg_train_run
+    description: Silver. One row per (source, train_no, start_date) the collector attempted, with the chosen envelope.
+    columns:
+      - name: run_id
+        description: "<source>:<train_no>:<start_date>"
+        data_tests: [unique, not_null]
+      - name: source
+        data_tests: [not_null]
+      - name: train_no
+        data_tests:
+          - not_null
+          - expression_is_true:
+              arguments:
+                expression: "regexp_full_match(train_no, '\\d{5}')"
+      - name: start_date
+        data_tests: [not_null]
+      - name: fetch_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [ok, not_found, error]
+      - name: n_attempts
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+      - name: journey_date
+        description: journeyDate from the payload; should equal start_date.
+        data_tests:
+          - expression_is_true:
+              arguments:
+                expression: "journey_date = start_date"
+              config:
+                where: "journey_date is not null"
+                severity: warn
+
+  - name: stg_train_run_stop
+    description: Silver. One row per run × stop, scheduled vs actual (TIMESTAMPTZ, IST), day offsets resolved.
+    columns:
+      - name: run_stop_id
+        data_tests: [unique, not_null]
+      - name: run_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_train_run')
+                field: run_id
+      - name: seq
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 1
+      - name: station_code
+        data_tests: [not_null]
+      - name: distance_km
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5000
+      - name: sched_day_offset
+        description: Journey day of the scheduled time at this stop (0 = start date).
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5
+      - name: arr_delay_min
+        description: Actual − scheduled arrival in minutes (provider delay text only when a time is missing).
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -180
+                max_value: 4320
+      - name: dep_delay_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -180
+                max_value: 4320
+      - name: sched_halt_min
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 720
