@@ -23,17 +23,18 @@ token is needed. The workflow files are kept in [`infra/data-repo/`](../../infra
 Then tell Claude. Claude pushes the workflows, runs the `probe` workflow to check how far back RailKit's history
 goes, sets `lookback_days`, and starts collection.
 
-## Current state: collection paused, waiting on a paid RailKit plan
-- **The free tier can't be used.** The probe on 2026-10-04 got `HTTP 403 "Missing SDK signature headers. To use the API,
-  please upgrade your plan."` for every date. Free accounts may only call through RailKit's official Node SDK, and
-  REST access needs a paid plan. We don't emulate the SDK signature.
-- `patribot-data` has the `collect` and `probe` workflows. Its `watchlist.yaml` (which overrides
-  `config/watchlist.yaml`) has `trains: []`, so scheduled runs make no calls and send no failure emails.
-- The probe can also be triggered by pushing `probe-request.txt` (line 1: train number, line 2: days back), because
-  workflow dispatch isn't available to Claude's session.
-- **To resume:** buy **Advance** (₹89, 10k/month, "API endpoint access", + optional 20k pack ₹159). **Pro (₹59) is
-  "SDK access only"** like the free tier, so it would also return 403 to our REST client. Claude then re-runs the
-  probe, sets `lookback_days`, and restores the train list and budget.
+## Current state: collecting on the RailKit Advance plan (₹89, 10k/month)
+- The **free tier and Pro (₹59) are "SDK access only"**: REST calls return `403 "Missing SDK signature headers"`
+  (probe on 2026-10-04). Advance includes REST endpoint access.
+- **Probe on Advance (2026-10-04, train 12301):** journey history came back for the **last 6 days**. 7 days back and
+  today (journey not yet finished) returned `404 "Train history record not found"`. The response matches the documented
+  shape (`data.stations[]` with `distanceKm`, `arrival`/`departure` `scheduled`/`actual`/`delay`). So
+  `lookback_days: 5`.
+- The data repo's `watchlist.yaml` (which overrides `config/watchlist.yaml`) holds the 7 seed trains with
+  `max_calls_per_month: 9000`. It will be replaced by the generated corridor watchlist.
+- `collect` runs every 3 h, and also on any push that changes `watchlist.yaml` or `collect-request.txt`. `probe` runs on a push of
+  `probe-request.txt` (line 1: train number, line 2: days back). Both are push-triggered because workflow dispatch isn't
+  available to Claude's session.
 
 ## Monitoring
 - **A failed run sends you an email from GitHub.** The run fails on a bad key (401/403), an exhausted quota or rate limit
