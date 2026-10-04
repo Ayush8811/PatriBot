@@ -1,0 +1,81 @@
+name: watchlist
+
+# Lives in the PRIVATE data repo (Ayush8811/patribot-data). Rebuilds the collector watchlist from RailKit timetable
+# data and corridor membership (docs/phase1/watchlist.md in the code repo) and commits `watchlist.yaml` at this
+# repo's root, where the `collect` workflow picks it up. The watchlist is RailKit-derived, so it must never be
+# committed to the public code repo (BRD D15).
+#
+# Cost: ~85 station-timetable calls per run, plus one schedule call per candidate train whose cached schedule
+# (state/timetable-cache/, kept ~3-4 weeks) has expired. The first run needs ~1,000-1,500 calls; later weekly runs
+# a few hundred. --max-calls caps a run; if it is hit, the run fails, nothing but the cache is committed, and the
+# next run resumes from the cache.
+#
+# Needs one secret in this repo: RAIL_API_KEY (RailKit key). Without it, runs are skipped.
+
+on:
+  schedule:
+    - cron: "41 20 * * 0"  # Sundays 20:41 UTC (02:11 IST Monday)
+  workflow_dispatch:
+    inputs:
+      max_calls:
+        description: Max RailKit requests for this run
+        default: "2500"
+
+concurrency:
+  group: watchlist
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      HAS_KEY: ${{ secrets.RAIL_API_KEY != '' }}
+    steps:
+      - name: Check configuration
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::RAIL_API_KEY secret not set; skipping."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          repository: Ayush8811/PatriBot
+          ref: main
+          path: .code
+
+      - uses: astral-sh/setup-uv@v6
+        if: env.HAS_KEY == 'true'
+
+      - name: Build watchlist
+        if: env.HAS_KEY == 'true'
+        env:
+          RAIL_API_KEY: ${{ secrets.RAIL_API_KEY }}
+          RAIL_MIN_INTERVAL_S: ${{ vars.RAIL_MIN_INTERVAL_S || '1.1' }}
+        run: |
+          # keep the collector settings of the current watchlist (edit them here); the code repo seed on the first run
+          base=watchlist.yaml; [ -f "$base" ] || base=.code/config/watchlist.yaml
+          mkdir -p state
+          uv run --project .code --frozen patribot-watchlist build --source railkit \
+            --corridors .code/config/corridors.yaml --base-watchlist "$base" \
+            --out watchlist.yaml --report state/watchlist-report.json \
+            --cache-dir state/timetable-cache --max-calls "${{ inputs.max_calls || '2500' }}" \
+            --run-days-order "${{ vars.RAIL_RUN_DAYS_ORDER || 'mon' }}"
+
+      - name: Commit
+        if: always() && env.HAS_KEY == 'true'
+        run: |
+          git config user.name "patribot-collector"
+          git config user.email "patribot-collector@users.noreply.github.com"
+          for p in watchlist.yaml state/watchlist-report.json state/timetable-cache; do
+            if [ -e "$p" ]; then git add -A -- "$p"; fi
+          done
+          if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          git commit -q -m "watchlist: $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && exit 0; sleep $((i * 5)); done
+          exit 1

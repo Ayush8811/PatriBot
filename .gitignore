@@ -7,3 +7,7 @@ __pycache__/
 # local checkout of the private patribot-data repo and probe output
 data/
 samples/
+# RailKit-derived watchlist output and response cache: belong in the private data repo only (D15)
+/watchlist.yaml
+/watchlist-report.json
+.watchlist-cache/

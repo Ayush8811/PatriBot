@@ -3,8 +3,9 @@
 # A corridor is a PATH, not an endpoint pair. `paths` lists the main-line waypoints (station codes) in the
 # A -> B direction. A train is a corridor member if it is a reserved train and its stopping pattern covers
 # >= membership.min_km of a path, or >= membership.min_consecutive_segments consecutive waypoint-to-waypoint
-# segments, in either direction. Membership is computed from timetable data in dbt (`dim_train_corridor`),
-# not here.
+# segments, in either direction. Membership is computed from timetable data by `patribot-watchlist build`
+# (src/patribot/watchlist/membership.py, docs/phase1/watchlist.md); dbt `dim_train_corridor` must apply the same rule.
+# An end-cluster station that is not a waypoint counts as the path's first or last waypoint.
 #
 # Station codes and waypoints are a Phase 0 draft and must be confirmed against timetable data in Phase 1
 # (`verified: false`).

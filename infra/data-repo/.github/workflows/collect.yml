@@ -47,9 +47,12 @@ jobs:
         env:
           RAIL_API_KEY: ${{ secrets.RAIL_API_KEY }}
           RAIL_MIN_INTERVAL_S: ${{ vars.RAIL_MIN_INTERVAL_S || '1.1' }}
-        run: >
-          uv run --project .code --frozen patribot-collector run
-          --data-dir . --watchlist .code/config/watchlist.yaml --source "${{ vars.RAIL_SOURCE || 'railkit' }}"
+        run: |
+          # the generated watchlist (watchlist workflow) if present, else the seed in the code repo
+          wl=watchlist.yaml; [ -f "$wl" ] || wl=.code/config/watchlist.yaml
+          echo "watchlist: $wl"
+          uv run --project .code --frozen patribot-collector run \
+            --data-dir . --watchlist "$wl" --source "${{ vars.RAIL_SOURCE || 'railkit' }}"
 
       - name: Commit
         if: always() && env.HAS_KEY == 'true'
