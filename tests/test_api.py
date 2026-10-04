@@ -156,6 +156,7 @@ def test_q1_overnight_kolkata_delhi_fastest(client):
     )  # fmt: skip
     q, meta, its = body["query"], body["meta"], body["itineraries"]
     assert q["origin"] == "KOLKATA" and set(q["origin_stations"]) == KOLKATA and set(q["destination_stations"]) == DELHI
+    assert q["origin_name"] == "Kolkata (all stations)" and q["origin_kind"] == "cluster"
     assert meta["eta_model"] == "baseline_hist" and meta["dates_searched"] == 11
     assert meta["bookable_from"] == "2026-12-15" and meta["bookable_to"] == "2027-02-13"
     assert meta["candidates_considered"] >= len(its) == 5
@@ -245,7 +246,8 @@ def test_chat_stub_streams_tokens_then_itineraries(client):
         assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
         evs = events(r.read().decode())
     names = [e for e, _ in evs]
-    assert names[0] == "token" and names[-2:] == ["itineraries", "done"]
+    assert names[0] == "token" and names[-3:] == ["meta", "itineraries", "done"]
+    assert evs[-3][1]["eta_model"] == "baseline_hist" and evs[-3][1]["bookable_from"] == str(TODAY)
     its = evs[-2][1]
     assert its and all(it["legs"][0]["from_code"] in KOLKATA for it in its)
     assert evs[-1][1] == {"usage": {"queries_left_today": 3}}

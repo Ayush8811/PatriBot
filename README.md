@@ -10,7 +10,8 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
 3. Phase 0: [API provider spike](docs/phase0/01-api-provider-spike.md) · [Collector setup (owner steps)](docs/phase0/02-collector-setup.md)
 4. Phase 1: [Generated watchlist](docs/phase1/watchlist.md)
 5. Phase 1: [Data platform (run locally, tables)](docs/phase1/data-platform.md)
-6. Phase 2: [Planner and API](docs/phase2/planner-api.md) · [API v1 contract](docs/api/v1.md)
+6. [API v1 contract](docs/api/v1.md) · Phase 2: [Planner and API](docs/phase2/planner-api.md)
+7. Phase 3: [Web app (Next.js, mock mode)](docs/phase3/web-app.md)
 
 ## Status
 - **Phase 0, Foundations: done.** The collector runs every 3 h on RailKit Advance (D15) in the private `patribot-data` repo.
@@ -21,6 +22,8 @@ travel time"), including split/break-journey planning, with a RAG + agent layer.
     (holidays, festival windows, fog season) feeds `dim_date`.
 - **Phase 2, Planner + API: built.** Direct, overnight and split search with the `baseline_hist` ETA and explainable
   ranking, served by FastAPI under `/api/v1` ([contract](docs/api/v1.md)). `/chat` is a rule-based stub until Phase 4.
+- **Phase 3, Web app: in progress.** Next.js app in `web/` (search form, itinerary cards, train page, chat shell),
+  built against the API v1 contract. A fixtures mock mode lets it run without the backend.
 
 ## Development
 ```bash
@@ -43,4 +46,13 @@ PATRIBOT_TODAY=2026-12-10 uv run patribot-api       # http://127.0.0.1:8000/api/
 curl -s localhost:8000/api/v1/plan -H 'content-type: application/json' -d '{"origin": "KOLKATA",
   "destination": "DELHI", "date_from": "2026-12-20", "date_to": "2026-12-30",
   "preferences": {"overnight": true, "objective": "fastest"}}'
+```
+
+### Web app (`web/`, Node 22)
+```bash
+cd web && npm ci
+npm run dev:mock                                   # fixtures, no backend: http://localhost:3000
+npm run dev                                        # against NEXT_PUBLIC_API_BASE_URL (default http://localhost:8000/api/v1)
+npm run lint && npm run typecheck && npm test      # ESLint, tsc, Vitest
+npm run test:e2e                                   # Playwright smoke on a mock-mode production build
 ```

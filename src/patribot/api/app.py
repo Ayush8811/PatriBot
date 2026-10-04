@@ -170,5 +170,6 @@ def _chat_events(s: PlannerService, body: ChatRequest) -> Iterator[str]:
     for chunk in re.split(r"(?<=\. )", text):
         if chunk:
             yield sse("token", {"text": chunk})
+    yield sse("meta", result.meta.model_dump(mode="json"))  # addition: booking window, ETA model, data_as_of
     yield sse("itineraries", [it.model_dump(mode="json") for it in result.itineraries])
     yield done

@@ -22,3 +22,11 @@ dbt/.user.yml
 logs/
 .tmp_dagster_home_*/
 .dagster_home/
+# Phase 3 web app (Next.js): dependencies, build output, Playwright artefacts
+node_modules/
+web/.next/
+web/out/
+web/test-results/
+web/playwright-report/
+web/blob-report/
+web/e2e/screenshots/

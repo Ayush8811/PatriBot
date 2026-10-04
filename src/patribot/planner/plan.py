@@ -88,6 +88,8 @@ def plan(data: PlannerData, req: PlanRequest, today: date, cfg: PlannerConfig = 
         destination=dest.id,
         origin_kind=origin.kind,
         destination_kind=dest.kind,
+        origin_name=origin.name,
+        destination_name=dest.name,
         origin_stations=list(origin.stations),
         destination_stations=list(dest.stations),
     )

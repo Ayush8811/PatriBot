@@ -154,9 +154,23 @@ hidden ("plan only"), with a warning.
 Until Phase 4 the endpoint parses the message with rules (`patribot.api.chat`: places with "from"/"to", dates such as
 "Nov 20-30" / "25 November" / ISO / "tomorrow", "overnight", "fastest", "reliable", "split" / "break journey" /
 "full", "reach … by 9 AM" → hard `arrive_by` on P90 with the date as `arrive_by_date`, classes such as "3AC"), runs
-the same `plan()` and streams `token` events, one `itineraries` event and `done`. If something essential is missing
+the same `plan()` and streams `token` events, one `meta` and one `itineraries` event and `done`. If something essential is missing
 it asks a question instead (FR-3). Errors carry `code` (`server_error` only, until quotas exist) and `detail`. No
 quota is metered and no LLM is called.
+
+## Web app contract notes (docs/phase3/web-app.md), as answered in docs/api/v1.md
+
+| # | Note | Answer |
+|---|---|---|
+| 1 | Chat `itineraries` has no `meta` | New `event: meta` before `itineraries` (additive) |
+| 2 | No quota endpoint | Open: comes with accounts and metering in Phase 4 (FR-22, FR-23) |
+| 3 | Chat errors have no code | `error` carries `code`: `quota_exhausted` \| `spend_guard` \| `server_error` (note the spelling: `quota_exhausted`) |
+| 4 | `query` shape | Pinned: resolved ids, kinds, display names and station lists |
+| 5 | Limits | Window ≤ 31 days (422 beyond); `max_results` default 10, capped at 20 |
+| 6 | Nullability | Per-stop delays `null` when `history_runs` is 0; station `cluster` may be `null` |
+| 7 | `on_time_pct` | Same definition as `pct_within_30min` (within 30 min), over the whole window |
+| 8 | ARP and `run_date` | Judged on each leg's `run_date` (the origin date), as the web app assumes |
+| 9 | CORS | `http://localhost:3000` and `http://localhost:3100` by default |
 
 ## Tests
 
